@@ -183,7 +183,9 @@ def is_supported_language(code: str) -> bool:
 
 
 # Convenience lookups for backward compatibility during transition
-def get_image_for_language(code: str, registry: Optional[str] = None, tag: str = "latest") -> str:
+def get_image_for_language(
+    code: str, registry: Optional[str] = None, tag: str = "latest"
+) -> str:
     """Get Docker image for a language."""
     lang = get_language(code)
     if lang:

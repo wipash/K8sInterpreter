@@ -399,12 +399,14 @@ class Settings(BaseSettings):
         """Initialize supported_languages with registry-prefixed images."""
         if v:
             return v
-        
+
         registry = values.get("docker_image_registry", "code-interpreter")
         tag = values.get("docker_image_tag", "latest")
         return {
             code: {
-                "image": f"{registry}/{lang.image.rsplit(':', 1)[0]}:{tag}" if registry else f"{lang.image.rsplit(':', 1)[0]}:{tag}",
+                "image": f"{registry}/{lang.image.rsplit(':', 1)[0]}:{tag}"
+                if registry
+                else f"{lang.image.rsplit(':', 1)[0]}:{tag}",
                 "timeout_multiplier": lang.timeout_multiplier,
                 "memory_multiplier": lang.memory_multiplier,
             }
@@ -601,10 +603,13 @@ class Settings(BaseSettings):
         config = self.get_language_config(code)
         if config and "image" in config:
             return config["image"]
-        
+
         # Fallback to languages.py logic if not in settings
         from .languages import get_image_for_language as get_img
-        return get_img(code, registry=self.docker_image_registry, tag=self.docker_image_tag)
+
+        return get_img(
+            code, registry=self.docker_image_registry, tag=self.docker_image_tag
+        )
 
     def get_execution_timeout(self, language: str) -> int:
         """Get execution timeout for a specific language."""
