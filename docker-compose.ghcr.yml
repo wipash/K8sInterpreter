@@ -16,7 +16,7 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - DOCKER_IMAGE_REGISTRY=ghcr.io/usnavy13/librecodeinterpreter
-      - DOCKER_IMAGE_TAG=${DOCKER_IMAGE_TAG:-latest}
+      - DOCKER_IMAGE_TAG=${DOCKER_IMAGE_TAG:-dev}
 
       # Service discovery (container names)
       - REDIS_HOST=redis
