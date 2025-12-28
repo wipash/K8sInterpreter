@@ -129,6 +129,10 @@ class Settings(BaseSettings):
     docker_tmpfs: Dict[str, str] = Field(
         default_factory=lambda: {"/tmp": "rw,noexec,nosuid,size=100m"}
     )
+    docker_seccomp_profile: Optional[str] = Field(
+        default="docker/seccomp-sandbox.json",
+        description="Path to seccomp profile JSON file (None to disable)",
+    )
 
     # Resource Limits - Execution
     max_execution_time: int = Field(default=30, ge=1, le=300)
@@ -142,7 +146,12 @@ class Settings(BaseSettings):
     max_cpu_quota: int = Field(
         default=50000, ge=10000, le=100000
     )  # Deprecated, use max_cpus
-    max_processes: int = Field(default=32, ge=1, le=128)
+    max_pids: int = Field(
+        default=512,
+        ge=64,
+        le=4096,
+        description="Per-container process limit (cgroup pids_limit). Prevents fork bombs.",
+    )
     max_open_files: int = Field(default=1024, ge=64, le=4096)
 
     # Resource Limits - Files
@@ -538,7 +547,7 @@ class Settings(BaseSettings):
             max_memory_mb=self.max_memory_mb,
             max_cpus=self.max_cpus,
             max_cpu_quota=self.max_cpu_quota,
-            max_processes=self.max_processes,
+            max_pids=self.max_pids,
             max_open_files=self.max_open_files,
             max_file_size_mb=self.max_file_size_mb,
             max_total_file_size_mb=self.max_total_file_size_mb,

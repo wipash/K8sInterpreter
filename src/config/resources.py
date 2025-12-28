@@ -19,7 +19,12 @@ class ResourcesConfig(BaseSettings):
     max_cpu_quota: int = Field(
         default=50000, ge=10000, le=100000
     )  # Deprecated, use max_cpus
-    max_processes: int = Field(default=32, ge=1, le=128)
+    max_pids: int = Field(
+        default=512,
+        ge=64,
+        le=4096,
+        description="Per-container process limit (cgroup pids_limit). Prevents fork bombs.",
+    )
     max_open_files: int = Field(default=1024, ge=64, le=4096)
 
     # File Limits

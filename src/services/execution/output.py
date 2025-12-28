@@ -1,6 +1,8 @@
 """Output processing and validation for code execution."""
 
+import os
 import re
+import secrets
 from pathlib import Path
 from typing import Any, Dict
 
@@ -221,13 +223,55 @@ class OutputProcessor:
         return f"Execution failed (exit code {exit_code}):\n{stderr_clean}"
 
     @classmethod
-    def normalize_filename(cls, filename: str) -> str:
-        """Normalize filename for container use: replace spaces with underscores.
+    def sanitize_filename(cls, input_name: str) -> str:
+        """Sanitize filename to match LibreChat's sanitization logic.
 
-        Important: we deliberately KEEP non-ASCII characters (e.g., Japanese)
-        so that user-visible filenames aren't transliterated.
+        Replaces all non-alphanumeric characters (except '.' and '-') with
+        underscores. This ensures filenames on disk match what LibreChat
+        reports in the system prompt.
+
+        Args:
+            input_name: Original filename (may include path components)
+
+        Returns:
+            Sanitized filename safe for container use
         """
+        if not input_name:
+            return "_"
+
         try:
-            return filename.replace(" ", "_") if filename else filename
-        except Exception:
-            return filename
+            # Remove any directory components (path traversal prevention)
+            name = os.path.basename(input_name)
+
+            # Replace any non-alphanumeric characters except for '.' and '-'
+            name = re.sub(r"[^a-zA-Z0-9.-]", "_", name)
+
+            # Ensure the name doesn't start with a dot (hidden file in Unix)
+            if name.startswith(".") or name == "":
+                name = "_" + name
+
+            # Limit the length of the filename
+            max_length = 255
+            if len(name) > max_length:
+                ext = os.path.splitext(name)[1]
+                name_without_ext = os.path.splitext(name)[0]
+                random_suffix = secrets.token_hex(3)
+                truncate_len = max_length - len(ext) - 7
+                if truncate_len < 1:
+                    truncate_len = 1
+                name = name_without_ext[:truncate_len] + "-" + random_suffix + ext
+
+            return name
+
+        except Exception as e:
+            logger.error(f"Failed to sanitize filename: {e}")
+            return "_"
+
+    @classmethod
+    def normalize_filename(cls, filename: str) -> str:
+        """Deprecated: Use sanitize_filename instead.
+
+        This method is kept for backward compatibility but delegates to
+        sanitize_filename which matches LibreChat's sanitization logic.
+        """
+        return cls.sanitize_filename(filename)
