@@ -173,6 +173,12 @@ class ContainerManager:
         if repl_mode:
             env["REPL_MODE"] = "true"
 
+        # Limit OpenBLAS/OpenMP threads to prevent nproc exhaustion
+        # All containers run as same user and share the nproc limit
+        env.setdefault("OPENBLAS_NUM_THREADS", "1")
+        env.setdefault("OMP_NUM_THREADS", "1")
+        env.setdefault("MKL_NUM_THREADS", "1")
+
         # Determine network configuration
         use_wan_access = settings.enable_wan_access
 
@@ -253,7 +259,12 @@ class ContainerManager:
             "cap_add": ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"],
             "read_only": False,
             "tmpfs": {"/tmp": "noexec,nosuid,size=100m"},
+            # pids_limit: cgroup-based per-container process limit (prevents fork bombs)
+            # This is truly per-container unlike nproc which is per-UID
+            "pids_limit": settings.max_pids,
             "ulimits": [
+                # nproc: per-UID limit (shared across containers with same user)
+                # Set high since pids_limit handles per-container limiting
                 docker.types.Ulimit(
                     name="nproc",
                     soft=settings.max_processes,
