@@ -15,6 +15,7 @@ from unidecode import unidecode
 # Local application imports
 from ..config import settings
 from ..dependencies import FileServiceDep
+from ..services.execution.output import OutputProcessor
 from ..utils.id_generator import generate_session_id
 
 
@@ -119,13 +120,13 @@ async def upload_file(
                 content_type=file.content_type,
             )
 
-            # Get file info for complete details
-            file_info = await file_service.get_file_info(session_id, file_id)
+            # Sanitize filename to match what will be used in container
+            sanitized_name = OutputProcessor.sanitize_filename(file.filename)
 
             uploaded_files.append(
                 {
                     "id": file_id,
-                    "name": file.filename,
+                    "name": sanitized_name,
                     "session_id": session_id,
                     "content": None,  # LibreChat doesn't return content in upload response
                     "size": len(content),
@@ -207,10 +208,12 @@ async def list_files(
             # Return simple file information
             simple_files = []
             for file_info in files:
+                # Return sanitized filename to match container
+                sanitized_name = OutputProcessor.sanitize_filename(file_info.filename)
                 simple_files.append(
                     {
                         "id": file_info.file_id,
-                        "name": file_info.filename,
+                        "name": sanitized_name,
                         "path": file_info.path,
                     }
                 )
@@ -219,9 +222,11 @@ async def list_files(
             # Return full file details - LibreChat format
             detailed_files = []
             for file_info in files:
+                # Return sanitized filename to match container
+                sanitized_name = OutputProcessor.sanitize_filename(file_info.filename)
                 detailed_files.append(
                     {
-                        "name": file_info.filename,
+                        "name": sanitized_name,
                         "id": file_info.file_id,
                         "session_id": session_id,
                         "content": None,  # Not returned in list
