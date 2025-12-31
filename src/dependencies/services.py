@@ -20,23 +20,23 @@ from ..services.interfaces import (
 
 logger = structlog.get_logger(__name__)
 
-# Global reference to container pool (set by main.py lifespan)
-_container_pool = None
+# Global reference to Kubernetes manager (set by main.py lifespan)
+_kubernetes_manager = None
 
 
-def set_container_pool(pool) -> None:
-    """Set the global container pool reference.
+def set_kubernetes_manager(manager) -> None:
+    """Set the global Kubernetes manager reference.
 
-    Called by main.py after the pool is initialized in lifespan.
+    Called by main.py after the manager is initialized in lifespan.
     """
-    global _container_pool
-    _container_pool = pool
-    logger.info("Container pool registered with dependency injection")
+    global _kubernetes_manager
+    _kubernetes_manager = manager
+    logger.info("Kubernetes manager registered with dependency injection")
 
 
-def get_container_pool():
-    """Get the container pool instance (may be None if disabled)."""
-    return _container_pool
+def get_kubernetes_manager():
+    """Get the Kubernetes manager instance (may be None if disabled)."""
+    return _kubernetes_manager
 
 
 @lru_cache()
@@ -62,21 +62,21 @@ def get_state_archival_service() -> StateArchivalService:
 def get_execution_service() -> ExecutionServiceInterface:
     """Get execution service instance.
 
-    Note: Container pool is injected separately after creation via set_container_pool.
+    Note: Kubernetes manager is injected separately after creation.
     """
     return CodeExecutionService()
 
 
-def inject_container_pool_to_execution_service():
-    """Inject container pool into the execution service.
+def inject_kubernetes_manager_to_execution_service():
+    """Inject Kubernetes manager into the execution service.
 
-    Called after pool is initialized to wire it into the cached execution service.
+    Called after manager is initialized to wire it into the cached execution service.
     """
-    global _container_pool
-    if _container_pool:
+    global _kubernetes_manager
+    if _kubernetes_manager:
         execution_service = get_execution_service()
-        execution_service.container_pool = _container_pool
-        logger.info("Container pool injected into execution service")
+        execution_service._kubernetes_manager = _kubernetes_manager
+        logger.info("Kubernetes manager injected into execution service")
 
 
 @lru_cache()

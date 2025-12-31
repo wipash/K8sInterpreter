@@ -28,7 +28,7 @@ tests/
 
 Unit tests validate individual components in isolation:
 
-- Mock external dependencies (Docker, Redis, MinIO)
+- Mock external dependencies (Kubernetes, Redis, MinIO)
 - Fast execution (~seconds)
 - No infrastructure required
 
@@ -36,10 +36,10 @@ Unit tests validate individual components in isolation:
 
 Integration tests validate end-to-end behavior:
 
-- Require running Docker, Redis, MinIO
+- Require running Kubernetes (or kind/k3s), Redis, MinIO
 - Test actual API endpoints
 - Validate LibreChat compatibility
-- Test container behavior and cleanup
+- Test pod behavior and cleanup
 
 ---
 
@@ -144,13 +144,13 @@ Ensures compatibility with LibreChat's Code Interpreter API:
 - File reference format
 - Response structure matching LibreChat expectations
 
-### Container Behavior Tests
+### Pod Behavior Tests
 
 **File:** `tests/integration/test_container_behavior.py`
 
-Tests container lifecycle and execution:
+Tests pod lifecycle and execution:
 
-- Container creation and cleanup
+- Pod creation and cleanup
 - Resource limit enforcement
 - Timeout handling
 - Output capture
@@ -234,10 +234,10 @@ For unit tests, mock external dependencies:
 from unittest.mock import AsyncMock, patch
 
 @pytest.mark.asyncio
-async def test_execution_with_mocked_docker():
-    with patch("src.services.container.client.docker_client") as mock_docker:
-        mock_container = AsyncMock()
-        mock_docker.containers.run.return_value = mock_container
+async def test_execution_with_mocked_kubernetes():
+    with patch("src.services.kubernetes.client.get_k8s_client") as mock_k8s:
+        mock_pod = AsyncMock()
+        mock_k8s.create_namespaced_pod.return_value = mock_pod
 
         # Test code here
 ```
@@ -372,7 +372,7 @@ pytest --cov=src --cov-report=xml tests/
 1. **Check infrastructure:**
 
    ```bash
-   docker-compose ps  # All services should be "Up"
+   kubectl get pods -n librecodeinterpreter  # All pods should be "Running"
    ```
 
 2. **Check API health:**
@@ -383,7 +383,7 @@ pytest --cov=src --cov-report=xml tests/
 
 3. **Check logs:**
    ```bash
-   docker-compose logs api
+   kubectl logs -n librecodeinterpreter deployment/librecodeinterpreter
    ```
 
 ### Async Test Issues
@@ -398,7 +398,7 @@ If async tests hang:
 
 For tests that occasionally fail:
 
-- Check for race conditions in container cleanup
+- Check for race conditions in pod cleanup
 - Ensure proper test isolation
 - Use explicit waits for async operations
 

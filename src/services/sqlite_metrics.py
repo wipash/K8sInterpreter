@@ -33,7 +33,6 @@ CREATE TABLE IF NOT EXISTS executions (
     memory_peak_mb REAL,
     cpu_time_ms REAL,
     container_source TEXT,
-    repl_mode INTEGER DEFAULT 0,
     files_uploaded INTEGER DEFAULT 0,
     files_generated INTEGER DEFAULT 0,
     output_size_bytes INTEGER DEFAULT 0,
@@ -207,9 +206,9 @@ class SQLiteMetricsService:
                 INSERT OR IGNORE INTO executions (
                     execution_id, session_id, api_key_hash, user_id, entity_id,
                     language, status, execution_time_ms, memory_peak_mb, cpu_time_ms,
-                    container_source, repl_mode, files_uploaded, files_generated,
+                    container_source, files_uploaded, files_generated,
                     output_size_bytes, state_size_bytes, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -224,7 +223,6 @@ class SQLiteMetricsService:
                         m.memory_peak_mb,
                         m.cpu_time_ms,
                         m.container_source,
-                        1 if m.repl_mode else 0,
                         m.files_uploaded,
                         m.files_generated,
                         m.output_size_bytes,

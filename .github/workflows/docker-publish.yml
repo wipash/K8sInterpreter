@@ -1,63 +1,504 @@
-name: Docker Build and Publish
+name: Docker Images Build
 
 on:
   push:
-    branches: ["main", "dev"]
-    tags: ["v*.*.*"]
-    paths:
-      - 'Dockerfile'
-      - 'src/**'
-      - 'requirements.txt'
-      - 'pyproject.toml'
-      - '.github/workflows/docker-publish.yml'
+    tags:
+      - '*'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+    inputs:
+      force_all:
+        description: 'Build all images regardless of changes'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
+  # ==================== Detect Changes ====================
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      sidecar: ${{ steps.filter.outputs.sidecar }}
+      python: ${{ steps.filter.outputs.python }}
+      javascript: ${{ steps.filter.outputs.javascript }}
+      go: ${{ steps.filter.outputs.go }}
+      java: ${{ steps.filter.outputs.java }}
+      c-cpp: ${{ steps.filter.outputs.c-cpp }}
+      php: ${{ steps.filter.outputs.php }}
+      rust: ${{ steps.filter.outputs.rust }}
+      r: ${{ steps.filter.outputs.r }}
+      fortran: ${{ steps.filter.outputs.fortran }}
+      d: ${{ steps.filter.outputs.d }}
+      force_all: ${{ github.event.inputs.force_all == 'true' }}
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+      is_release: ${{ steps.tag.outputs.is_release }}
+      previous_tag: ${{ steps.prev_tag.outputs.tag_name }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log into registry ${{ env.REGISTRY }}
-        uses: docker/login-action@v3
+      - uses: actions/checkout@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # Need full history for tag comparison
 
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=sha,format=long
-            type=raw,value=latest,enable={{is_default_branch}}
+      - name: Get previous tag for comparison
+        id: prev_tag
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          CURRENT_TAG="${{ github.ref_name }}"
+          # Get all tags sorted by version, find the one before current
+          PREV_TAG=$(git tag --sort=-v:refname | grep -A1 "^${CURRENT_TAG}$" | tail -n1)
+          if [[ "$PREV_TAG" == "$CURRENT_TAG" ]] || [[ -z "$PREV_TAG" ]]; then
+            # No previous tag found, compare to initial commit
+            echo "No previous tag found, comparing to initial commit"
+            echo "base=$(git rev-list --max-parents=0 HEAD)" >> $GITHUB_OUTPUT
+            echo "tag_name=" >> $GITHUB_OUTPUT
+          else
+            echo "Comparing $CURRENT_TAG to previous tag $PREV_TAG"
+            echo "base=$PREV_TAG" >> $GITHUB_OUTPUT
+            echo "tag_name=$PREV_TAG" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
         with:
-          context: .
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # For tag pushes, compare to previous tag; otherwise use default (base branch)
+          base: ${{ steps.prev_tag.outputs.base || '' }}
+          filters: |
+            api:
+              - 'src/**'
+              - 'Dockerfile'
+              - 'pyproject.toml'
+              - 'uv.lock'
+            sidecar:
+              - 'docker/sidecar/**'
+            python:
+              - 'docker/python.Dockerfile'
+            javascript:
+              - 'docker/nodejs.Dockerfile'
+            go:
+              - 'docker/go.Dockerfile'
+            java:
+              - 'docker/java.Dockerfile'
+            c-cpp:
+              - 'docker/c-cpp.Dockerfile'
+            php:
+              - 'docker/php.Dockerfile'
+            rust:
+              - 'docker/rust.Dockerfile'
+            r:
+              - 'docker/r.Dockerfile'
+            fortran:
+              - 'docker/fortran.Dockerfile'
+            d:
+              - 'docker/d.Dockerfile'
+
+      - name: Set image tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            SHORT_SHA=$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-7)
+            echo "image_tag=dev-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            echo "image_tag=dev-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          else
+            echo "image_tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          fi
+
+  # ==================== Build Jobs ====================
+  api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-api
+      dockerfile: Dockerfile
+      context: .
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  sidecar:
+    needs: changes
+    if: needs.changes.outputs.sidecar == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-sidecar
+      dockerfile: docker/sidecar/Dockerfile
+      context: docker/sidecar
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  python:
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-python
+      dockerfile: docker/python.Dockerfile
+      context: docker
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  javascript:
+    needs: changes
+    if: needs.changes.outputs.javascript == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-javascript
+      dockerfile: docker/nodejs.Dockerfile
+      context: docker
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  typescript:
+    needs: changes
+    if: needs.changes.outputs.javascript == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-typescript
+      dockerfile: docker/nodejs.Dockerfile
+      context: docker
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  go:
+    needs: changes
+    if: needs.changes.outputs.go == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-go
+      dockerfile: docker/go.Dockerfile
+      context: docker
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  java:
+    needs: changes
+    if: needs.changes.outputs.java == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-java
+      dockerfile: docker/java.Dockerfile
+      context: docker
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  c-cpp:
+    needs: changes
+    if: needs.changes.outputs.c-cpp == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-c-cpp
+      dockerfile: docker/c-cpp.Dockerfile
+      context: docker
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  php:
+    needs: changes
+    if: needs.changes.outputs.php == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-php
+      dockerfile: docker/php.Dockerfile
+      context: docker
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-rust
+      dockerfile: docker/rust.Dockerfile
+      context: docker
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  r:
+    needs: changes
+    if: needs.changes.outputs.r == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-r
+      dockerfile: docker/r.Dockerfile
+      context: docker
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  fortran:
+    needs: changes
+    if: needs.changes.outputs.fortran == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-fortran
+      dockerfile: docker/fortran.Dockerfile
+      context: docker
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  d:
+    needs: changes
+    if: needs.changes.outputs.d == 'true' || needs.changes.outputs.force_all == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      image_name: librecodeinterpreter-d
+      dockerfile: docker/d.Dockerfile
+      context: docker
+      image_tag: ${{ needs.changes.outputs.image_tag }}
+      is_release: ${{ needs.changes.outputs.is_release == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  # ==================== Retag Unchanged Images (for releases) ====================
+  # These jobs run when an image didn't change but we still want it tagged with the new version
+
+  retag-api:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.api != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-api
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  retag-sidecar:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.sidecar != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-sidecar
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  retag-python:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.python != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-python
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  retag-javascript:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.javascript != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-javascript
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  retag-typescript:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.javascript != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-typescript
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  retag-go:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.go != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-go
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  retag-java:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.java != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-java
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  retag-c-cpp:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.c-cpp != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-c-cpp
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  retag-php:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.php != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-php
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  retag-rust:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.rust != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-rust
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  retag-r:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.r != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-r
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  retag-fortran:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.fortran != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-fortran
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  retag-d:
+    needs: changes
+    if: |
+      needs.changes.outputs.is_release == 'true' &&
+      needs.changes.outputs.previous_tag != '' &&
+      needs.changes.outputs.d != 'true' &&
+      needs.changes.outputs.force_all != 'true'
+    uses: ./.github/workflows/docker-retag-reusable.yml
+    with:
+      image_name: librecodeinterpreter-d
+      new_tag: ${{ needs.changes.outputs.image_tag }}
+      previous_tag: ${{ needs.changes.outputs.previous_tag }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

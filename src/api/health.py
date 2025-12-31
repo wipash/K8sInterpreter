@@ -139,11 +139,11 @@ async def minio_health_check(_: str = Depends(verify_api_key)):
         )
 
 
-@router.get("/health/docker", summary="Docker health check")
-async def docker_health_check(_: str = Depends(verify_api_key)):
-    """Check Docker daemon connectivity and performance."""
+@router.get("/health/kubernetes", summary="Kubernetes health check")
+async def kubernetes_health_check(_: str = Depends(verify_api_key)):
+    """Check Kubernetes API connectivity and pod pool status."""
     try:
-        result = await health_service.check_docker()
+        result = await health_service.check_kubernetes()
 
         if result.status == HealthStatus.UNHEALTHY:
             return JSONResponse(status_code=503, content=result.to_dict())
@@ -151,13 +151,13 @@ async def docker_health_check(_: str = Depends(verify_api_key)):
             return JSONResponse(status_code=200, content=result.to_dict())
 
     except Exception as e:
-        logger.error("Docker health check failed", error=str(e))
+        logger.error("Kubernetes health check failed", error=str(e))
         return JSONResponse(
             status_code=503,
             content={
-                "service": "docker",
+                "service": "kubernetes",
                 "status": "unhealthy",
-                "error": str(e) if settings.api_debug else "Docker check failed",
+                "error": str(e) if settings.api_debug else "Kubernetes check failed",
             },
         )
 
@@ -353,9 +353,9 @@ async def get_api_key_metrics(
         )
 
 
-@router.get("/metrics/pool", summary="Container pool metrics")
+@router.get("/metrics/pool", summary="Pod pool metrics")
 async def get_pool_metrics(_: str = Depends(verify_api_key)):
-    """Get container pool statistics.
+    """Get pod pool statistics.
 
     Returns:
         Pool hit rates, acquisition times, and exhaustion events

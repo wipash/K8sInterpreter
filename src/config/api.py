@@ -1,11 +1,17 @@
 """API server configuration."""
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class APIConfig(BaseSettings):
     """API server settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     host: str = Field(default="0.0.0.0", alias="api_host")
     port: int = Field(default=8000, ge=1, le=65535, alias="api_port")
@@ -26,7 +32,3 @@ class APIConfig(BaseSettings):
 
     # Documentation
     enable_docs: bool = Field(default=True)
-
-    class Config:
-        env_prefix = ""
-        extra = "ignore"

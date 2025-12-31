@@ -8,7 +8,6 @@ from typing import List, Optional, Tuple, Dict, Any
 # Third-party imports
 import redis.asyncio as redis
 import structlog
-from minio import Minio
 from minio.error import S3Error
 
 # Local application imports
@@ -26,13 +25,9 @@ class FileService(FileServiceInterface):
 
     def __init__(self):
         """Initialize the file service with MinIO and Redis clients."""
-        # Initialize MinIO client
-        self.minio_client = Minio(
-            settings.minio_endpoint,
-            access_key=settings.minio_access_key,
-            secret_key=settings.minio_secret_key,
-            secure=settings.minio_secure,
-        )
+        # Initialize MinIO client using the config's create_client method
+        # which handles IAM vs static credentials automatically
+        self.minio_client = settings.minio.create_client()
 
         # Initialize Redis client
         self.redis_client = redis.from_url(

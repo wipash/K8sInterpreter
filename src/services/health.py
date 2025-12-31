@@ -5,10 +5,9 @@ import asyncio
 import time
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
 
 # Third-party imports
-import docker
 import redis.asyncio as redis
 import structlog
 from minio import Minio
@@ -16,6 +15,9 @@ from minio.error import S3Error
 
 # Local application imports
 from ..config import settings
+
+if TYPE_CHECKING:
+    from .kubernetes import KubernetesManager
 
 
 logger = structlog.get_logger(__name__)
@@ -74,16 +76,15 @@ class HealthCheckService:
     def __init__(self):
         """Initialize health check service."""
         self._redis_client: Optional[redis.Redis] = None
-        self._docker_client: Optional[docker.DockerClient] = None
         self._minio_client: Optional[Minio] = None
-        self._container_pool = None
+        self._kubernetes_manager: Optional["KubernetesManager"] = None
         self._last_check_time: Optional[datetime] = None
         self._cached_results: Dict[str, HealthCheckResult] = {}
         self._cache_ttl_seconds = 30  # Cache results for 30 seconds
 
-    def set_container_pool(self, pool) -> None:
-        """Set container pool reference for health checks."""
-        self._container_pool = pool
+    def set_kubernetes_manager(self, manager: "KubernetesManager") -> None:
+        """Set Kubernetes manager reference for health checks."""
+        self._kubernetes_manager = manager
 
     async def check_all_services(
         self, use_cache: bool = True
@@ -105,14 +106,14 @@ class HealthCheckService:
         tasks = [
             self.check_redis(),
             self.check_minio(),
-            self.check_docker(),
+            self.check_kubernetes(),
         ]
-        service_names = ["redis", "minio", "docker"]
+        service_names = ["redis", "minio", "kubernetes"]
 
-        # Add container pool check if pool is configured
-        if self._container_pool and settings.container_pool_enabled:
-            tasks.append(self.check_container_pool())
-            service_names.append("container_pool")
+        # Add pod pool check if kubernetes manager is configured
+        if self._kubernetes_manager and settings.pod_pool_enabled:
+            tasks.append(self.check_pod_pool())
+            service_names.append("pod_pool")
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -224,19 +225,13 @@ class HealthCheckService:
 
         try:
             # Create MinIO client if not exists
+            # Uses the config's create_client method which handles IAM vs static credentials
             if not self._minio_client:
-                self._minio_client = Minio(
-                    settings.minio_endpoint,
-                    access_key=settings.minio_access_key,
-                    secret_key=settings.minio_secret_key,
-                    secure=settings.minio_secure,
-                )
+                self._minio_client = settings.minio.create_client()
 
-            # Test basic connectivity by listing buckets
             loop = asyncio.get_event_loop()
-            buckets = await loop.run_in_executor(None, self._minio_client.list_buckets)
 
-            # Check if our bucket exists
+            # Check if our bucket exists (doesn't require s3:ListAllMyBuckets permission)
             bucket_exists = await loop.run_in_executor(
                 None, self._minio_client.bucket_exists, settings.minio_bucket
             )
@@ -298,7 +293,6 @@ class HealthCheckService:
                 "endpoint": settings.minio_endpoint,
                 "bucket": settings.minio_bucket,
                 "bucket_exists": bucket_exists,
-                "total_buckets": len(buckets),
                 "secure": settings.minio_secure,
             }
 
@@ -339,77 +333,42 @@ class HealthCheckService:
                 error=str(e),
             )
 
-    async def check_docker(self) -> HealthCheckResult:
-        """Check Docker daemon connectivity and performance."""
+    async def check_kubernetes(self) -> HealthCheckResult:
+        """Check Kubernetes API connectivity and status."""
         start_time = time.time()
 
         try:
-            # Create Docker client if not exists
-            if not self._docker_client:
-                try:
-                    # Try to use the default Docker socket
-                    self._docker_client = docker.from_env(
-                        timeout=settings.health_check_timeout
-                    )
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to create Docker client from environment: {e}"
-                    )
-                    # Fallback to explicit socket path
-                    self._docker_client = docker.DockerClient(
-                        base_url="unix://var/run/docker.sock",
-                        timeout=settings.health_check_timeout,
-                    )
-
-            # Test basic connectivity
-            loop = asyncio.get_event_loop()
-            version_info = await loop.run_in_executor(None, self._docker_client.version)
-
-            # Get system info
-            system_info = await loop.run_in_executor(None, self._docker_client.info)
-
-            # List containers to test API functionality
-            containers = await loop.run_in_executor(
-                None, self._docker_client.containers.list, True
-            )
-
-            # Check if we can pull a simple image (test registry connectivity)
-            try:
-                await loop.run_in_executor(
-                    None, self._docker_client.images.pull, "hello-world:latest"
+            # Check if Kubernetes manager is configured
+            if not self._kubernetes_manager:
+                return HealthCheckResult(
+                    service="kubernetes",
+                    status=HealthStatus.UNKNOWN,
+                    error="Kubernetes manager not configured",
                 )
-                registry_accessible = True
-            except Exception as e:
-                logger.warning("Docker registry not accessible", error=str(e))
-                registry_accessible = False
+
+            # Test connectivity by getting pool stats
+            pool_stats = self._kubernetes_manager.get_pool_stats()
 
             response_time = (time.time() - start_time) * 1000
 
-            # Determine status
+            # Determine status based on pool health
             status = HealthStatus.HEALTHY
             if response_time > 3000:  # > 3 seconds
                 status = HealthStatus.DEGRADED
-            elif not registry_accessible:
-                status = HealthStatus.DEGRADED
 
-            # Calculate resource usage
-            total_containers = len(containers)
-            running_containers = len([c for c in containers if c.status == "running"])
+            # Get namespace info
+            namespace = self._kubernetes_manager.namespace or "default"
 
             details = {
-                "version": version_info.get("Version", "unknown"),
-                "api_version": version_info.get("ApiVersion", "unknown"),
-                "platform": version_info.get("Platform", {}).get("Name", "unknown"),
-                "total_containers": total_containers,
-                "running_containers": running_containers,
-                "registry_accessible": registry_accessible,
-                "server_version": system_info.get("ServerVersion", "unknown"),
-                "memory_total_gb": round(system_info.get("MemTotal", 0) / (1024**3), 2),
-                "cpu_count": system_info.get("NCPU", 0),
+                "namespace": namespace,
+                "pool_enabled": settings.pod_pool_enabled,
+                "sidecar_image": settings.k8s_sidecar_image,
+                "total_languages_configured": len(pool_stats),
+                "pool_stats": pool_stats,
             }
 
             return HealthCheckResult(
-                service="docker",
+                service="kubernetes",
                 status=status,
                 response_time_ms=response_time,
                 details=details,
@@ -418,76 +377,66 @@ class HealthCheckService:
         except Exception as e:
             response_time = (time.time() - start_time) * 1000
             logger.error(
-                "Docker health check failed",
+                "Kubernetes health check failed",
                 error=str(e),
                 response_time_ms=response_time,
             )
 
             return HealthCheckResult(
-                service="docker",
+                service="kubernetes",
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=response_time,
                 error=str(e),
             )
 
-    async def check_container_pool(self) -> HealthCheckResult:
-        """Check container pool health and statistics."""
+    async def check_pod_pool(self) -> HealthCheckResult:
+        """Check pod pool health and statistics."""
         start_time = time.time()
 
         try:
-            if not self._container_pool:
+            if not self._kubernetes_manager:
                 return HealthCheckResult(
-                    service="container_pool",
+                    service="pod_pool",
                     status=HealthStatus.UNKNOWN,
-                    error="Container pool not configured",
+                    error="Kubernetes manager not configured",
                 )
 
             # Get pool statistics
-            stats = self._container_pool.get_stats()
+            stats = self._kubernetes_manager.get_pool_stats()
 
             response_time = (time.time() - start_time) * 1000
 
             # Calculate totals
-            total_available = sum(s.available_count for s in stats.values())
-            total_acquisitions = sum(s.total_acquisitions for s in stats.values())
-            pool_hits = sum(s.pool_hits for s in stats.values())
-            pool_misses = sum(s.pool_misses for s in stats.values())
-
-            # Calculate hit rate (pool hits / total acquisitions)
-            hit_rate = 0.0
-            if total_acquisitions > 0:
-                hit_rate = (pool_hits / total_acquisitions) * 100
+            total_available = sum(s.get("available", 0) for s in stats.values())
+            total_in_use = sum(s.get("in_use", 0) for s in stats.values())
+            total_creating = sum(s.get("creating", 0) for s in stats.values())
 
             # Determine status
             status = HealthStatus.HEALTHY
-            if total_available == 0:
+            if total_available == 0 and total_in_use == 0:
                 status = HealthStatus.DEGRADED  # Pool is empty
-            elif hit_rate < 50 and total_acquisitions > 10:
-                status = HealthStatus.DEGRADED  # Low hit rate
 
             # Per-language breakdown
             language_stats = {}
             for lang, s in stats.items():
                 language_stats[lang] = {
-                    "available": s.available_count,
-                    "acquisitions": s.total_acquisitions,
-                    "pool_hits": s.pool_hits,
-                    "pool_misses": s.pool_misses,
+                    "available": s.get("available", 0),
+                    "in_use": s.get("in_use", 0),
+                    "creating": s.get("creating", 0),
+                    "target_size": s.get("target_size", 0),
                 }
 
             details = {
                 "enabled": True,
-                "architecture": "stateless",  # Containers destroyed after each execution
+                "architecture": "kubernetes-pods",
                 "total_available": total_available,
-                "total_acquisitions": total_acquisitions,
-                "pool_hits": pool_hits,
-                "pool_misses": pool_misses,
-                "hit_rate_percent": round(hit_rate, 2),
+                "total_in_use": total_in_use,
+                "total_creating": total_creating,
                 "languages": language_stats,
             }
 
             return HealthCheckResult(
-                service="container_pool",
+                service="pod_pool",
                 status=status,
                 response_time_ms=response_time,
                 details=details,
@@ -495,10 +444,10 @@ class HealthCheckService:
 
         except Exception as e:
             response_time = (time.time() - start_time) * 1000
-            logger.error("Container pool health check failed", error=str(e))
+            logger.error("Pod pool health check failed", error=str(e))
 
             return HealthCheckResult(
-                service="container_pool",
+                service="pod_pool",
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=response_time,
                 error=str(e),
@@ -539,22 +488,6 @@ class HealthCheckService:
                 except Exception as e:
                     logger.warning(
                         f"Error closing Redis connection during shutdown: {e}"
-                    )
-
-            # Close Docker connection with timeout
-            if self._docker_client:
-                try:
-                    # Docker client close is synchronous, but wrap in executor with timeout
-                    loop = asyncio.get_event_loop()
-                    await asyncio.wait_for(
-                        loop.run_in_executor(None, self._docker_client.close),
-                        timeout=2.0,
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning("Docker connection close timed out during shutdown")
-                except Exception as e:
-                    logger.warning(
-                        f"Error closing Docker connection during shutdown: {e}"
                     )
 
             logger.info("Closed health check service connections")

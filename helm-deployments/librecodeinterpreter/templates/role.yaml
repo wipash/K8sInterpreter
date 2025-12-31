@@ -1,0 +1,31 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "librecodeinterpreter.fullname" . }}-executor
+  namespace: {{ include "librecodeinterpreter.executionNamespace" . }}
+  labels:
+    {{- include "librecodeinterpreter.labels" . | nindent 4 }}
+    app.kubernetes.io/component: executor
+rules:
+  # Pod management for warm pools
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete", "get", "list", "watch", "patch"]
+  # Pod logs for debugging
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  # Pod exec (if needed for debugging, can be removed for production)
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  # Job management for cold-path languages
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  # Events for debugging pod issues
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+{{- end }}

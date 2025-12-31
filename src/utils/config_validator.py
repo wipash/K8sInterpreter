@@ -2,9 +2,7 @@
 
 import logging
 from typing import List, Dict, Any
-import docker
 import redis
-from minio import Minio
 from minio.error import S3Error
 
 from ..config import settings
@@ -39,7 +37,7 @@ class ConfigValidator:
         # Validate external services
         self._validate_redis_connection()
         self._validate_minio_connection()
-        self._validate_docker_connection()
+        self._validate_kubernetes_config()
 
         # Log results
         if self.warnings:
@@ -74,17 +72,12 @@ class ConfigValidator:
         if not settings.allowed_file_extensions:
             self.warnings.append("No allowed file extensions configured")
 
-        # Validate Docker security settings
+        # Validate security settings
         if not settings.enable_network_isolation:
             self.warnings.append("Network isolation is disabled - security risk")
 
         if not settings.enable_filesystem_isolation:
             self.warnings.append("Filesystem isolation is disabled - security risk")
-
-        if settings.docker_network_mode != "none":
-            self.warnings.append(
-                f"Docker network mode '{settings.docker_network_mode}' may allow network access"
-            )
 
     def _validate_resource_limits(self):
         """Validate resource limit configuration."""
@@ -133,21 +126,13 @@ class ConfigValidator:
     def _validate_minio_connection(self):
         """Validate MinIO/S3 connection."""
         try:
-            client = Minio(
-                settings.minio_endpoint,
-                access_key=settings.minio_access_key,
-                secret_key=settings.minio_secret_key,
-                secure=settings.minio_secure,
-                region=settings.minio_region,
-            )
+            # Use the minio config's create_client method which handles IAM vs static credentials
+            client = settings.minio.create_client()
 
-            # Test connection by listing buckets
-            buckets = list(client.list_buckets())
+            # Test connection by checking if our specific bucket exists
+            # This only requires s3:ListBucket on the specific bucket, not s3:ListAllMyBuckets
+            bucket_exists = client.bucket_exists(settings.minio_bucket)
 
-            # Check if our bucket exists
-            bucket_exists = any(
-                bucket.name == settings.minio_bucket for bucket in buckets
-            )
             if not bucket_exists:
                 self.warnings.append(
                     f"MinIO bucket '{settings.minio_bucket}' does not exist - will be created"
@@ -166,52 +151,42 @@ class ConfigValidator:
             else:
                 self.errors.append(f"MinIO validation error: {e}")
 
-    def _validate_docker_connection(self):
-        """Validate Docker connection (non-blocking)."""
+    def _validate_kubernetes_config(self):
+        """Validate Kubernetes configuration."""
         try:
-            # Try to create Docker client with very short timeout to avoid blocking
-            try:
-                client = docker.from_env(timeout=1)
-            except Exception as e:
-                logger.warning(f"Failed to create Docker client from environment: {e}")
-                # Fallback to explicit socket path with short timeout
-                try:
-                    client = docker.DockerClient(
-                        base_url="unix://var/run/docker.sock", timeout=1
-                    )
-                except Exception as fallback_e:
-                    self.warnings.append(f"Docker connection error: {fallback_e}")
-                    return
+            # Check if Kubernetes settings are configured
+            if settings.pod_pool_enabled:
+                # Validate sidecar image is set
+                if not settings.k8s_sidecar_image:
+                    self.warnings.append("Kubernetes sidecar image not configured")
 
-            # Skip ping test during startup to avoid blocking
-            # The actual connection will be tested when Docker is first used
+                # Validate resource limits are reasonable
+                if settings.k8s_memory_limit:
+                    # Parse memory limit (e.g., "512Mi", "1Gi")
+                    try:
+                        mem_str = settings.k8s_memory_limit
+                        if mem_str.endswith("Gi"):
+                            mem_mb = int(mem_str[:-2]) * 1024
+                        elif mem_str.endswith("Mi"):
+                            mem_mb = int(mem_str[:-2])
+                        else:
+                            mem_mb = int(mem_str) // (1024 * 1024)
 
-            # Skip image validation during startup to avoid blocking
-            # Images will be pulled when first needed
+                        if mem_mb < 64:
+                            self.warnings.append(
+                                f"Kubernetes memory limit {mem_str} may be too low"
+                            )
+                    except (ValueError, TypeError):
+                        self.warnings.append(
+                            f"Invalid Kubernetes memory limit format: {settings.k8s_memory_limit}"
+                        )
 
-        except docker.errors.DockerException as e:
-            self.warnings.append(f"Docker connection error: {e}")
+                # Validate image registry is set
+                if not settings.k8s_image_registry:
+                    self.warnings.append("Kubernetes image registry not configured")
+
         except Exception as e:
-            self.warnings.append(f"Docker validation error: {e}")
-
-    def _validate_language_images(self, docker_client):
-        """Validate that required language images are available or can be pulled."""
-        required_images = set()
-        for lang_config in settings.supported_languages.values():
-            if "image" in lang_config:
-                required_images.add(lang_config["image"])
-
-        missing_images = []
-        for image in required_images:
-            try:
-                docker_client.images.get(image)
-            except docker.errors.ImageNotFound:
-                missing_images.append(image)
-
-        if missing_images:
-            self.warnings.append(
-                f"Docker images not found locally (will be pulled on first use): {', '.join(missing_images)}"
-            )
+            self.warnings.append(f"Kubernetes config validation error: {e}")
 
 
 def validate_configuration() -> bool:

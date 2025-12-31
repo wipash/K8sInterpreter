@@ -4,11 +4,19 @@
 [![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![CI Status](https://github.com/usnavy13/LibreCodeInterpreter/actions/workflows/lint.yml/badge.svg)](https://github.com/usnavy13/LibreCodeInterpreter/actions/workflows/lint.yml)
 
-A secure, open-source code interpreter API that provides sandboxed code execution in isolated Docker containers. Compatible with LibreChat's Code Interpreter API.
+A secure, open-source code interpreter API that provides sandboxed code execution in isolated Kubernetes pods. Compatible with LibreChat's Code Interpreter API.
 
 ## Quick Start
 
-Get up and running in minutes by building the execution environment.
+Get up and running in minutes with Kubernetes deployment.
+
+### Prerequisites
+
+- Kubernetes cluster (1.24+)
+- Helm 3.x
+- kubectl configured for your cluster
+
+### Deployment
 
 1. **Clone the repository**
 
@@ -17,52 +25,34 @@ Get up and running in minutes by building the execution environment.
    cd LibreCodeInterpreter
    ```
 
-2. **Setup environment**
+2. **Deploy with Helm**
 
    ```bash
-   cp .env.example .env
-   # The default settings work out-of-the-box for local development
+   helm install librecodeinterpreter ./helm-deployments/librecodeinterpreter \
+     --namespace librecodeinterpreter \
+     --create-namespace \
+     --set api.replicas=2 \
+     --set execution.languages.python.poolSize=5
    ```
 
-3. **Prepare execution environment images**
+3. **Access the API**
 
-   You can either build the images locally (recommended) or pull pre-built images from GitHub Container Registry.
-
-   **Option A: Build locally (Recommended)**
    ```bash
-   # Build Python only (minimal)
-   ./docker/build-images.sh -l python
-
-   # Or build all 12 languages
-   ./docker/build-images.sh -p
-   ```
-
-   **Option B: Pull from GHCR**
-   ```bash
-   # Pull Python only
-   docker pull ghcr.io/usnavy13/librecodeinterpreter/python:latest
-
-   # Or pull the API and all languages
-   docker pull ghcr.io/usnavy13/librecodeinterpreter:latest
-   for lang in python nodejs go java c-cpp php rust r fortran d; do
-     docker pull ghcr.io/usnavy13/librecodeinterpreter/$lang:latest
-   done
-   ```
-
-4. **Start the API**
-
-   **Option A: Using local images (if you built them)**
-   ```bash
-   docker compose up -d
-   ```
-
-   **Option B: Using pre-built images (if you pulled them)**
-   ```bash
-   docker compose -f docker-compose.ghcr.yml up -d
+   # Port-forward for local access
+   kubectl -n librecodeinterpreter port-forward svc/librecodeinterpreter 8000:8000
    ```
 
 The API will be available at `http://localhost:8000`.
 Visit `http://localhost:8000/docs` for the interactive API documentation.
+
+### Local Development (Docker Compose)
+
+For local development without Kubernetes:
+
+```bash
+cp .env.example .env
+docker compose up -d
+```
 
 ## Admin Dashboard
 
@@ -71,17 +61,17 @@ A built-in admin dashboard is available at `http://localhost:8000/admin-dashboar
 
 - **Overview**: Real-time execution metrics, success rates, and performance graphs
 - **API Keys**: Create, view, and manage API keys with rate limiting
-- **System Health**: Monitor Redis, MinIO, Docker, and container pool status
+- **System Health**: Monitor Redis, MinIO, Kubernetes, and pod pool status
 
 The dashboard requires the master API key for authentication.
 
 ## Features
 
 - **Multi-language Support**: Execute code in 12 languages - Python, JavaScript, TypeScript, Go, Java, C, C++, PHP, Rust, R, Fortran, and D
-- **Sub-50ms Python Execution**: Pre-warmed REPL containers achieve ~20-40ms latency for simple Python code
-- **Container Pool**: Pre-warmed containers provide ~3ms acquisition time (vs 500-2000ms cold start)
-- **High Concurrency**: Thread-safe execution supporting 10+ concurrent requests
-- **Secure Execution**: Containerized sandboxed environments with comprehensive resource limits
+- **Sub-100ms Python Execution**: Warm pod pools with HTTP sidecar achieve ~50-100ms latency
+- **Pod Pool**: Pre-warmed Kubernetes pods provide fast acquisition (vs 3-10s cold start with Jobs)
+- **High Concurrency**: Kubernetes-native scaling supporting high concurrent requests
+- **Secure Execution**: Isolated Kubernetes pods with comprehensive resource limits and network policies
 - **File Management**: Upload, download, and manage files within execution sessions
 - **Session Management**: Redis-based session handling with automatic cleanup
 - **S3-Compatible Storage**: MinIO integration for persistent file storage
@@ -96,13 +86,15 @@ The dashboard requires the master API key for authentication.
 
 ## Architecture
 
-The LibreCodeInterpreter is built with a focus on security, speed, and scalability. It uses a combination of **FastAPI** for the web layer, **Docker** for sandboxed execution, and **Redis** for session management.
+The LibreCodeInterpreter is built with a focus on security, speed, and scalability. It uses a **Kubernetes-native architecture** with **FastAPI** for the web layer, **warm pod pools** for low-latency execution, and **Redis** for session management.
 
 Key features include:
 
-- **Container Pooling**: Pre-warmed containers for sub-50ms execution.
-- **Stateless Execution**: Each execution is isolated and ephemeral.
-- **Session Persistence**: Optional state persistence for Python sessions.
+- **Warm Pod Pools**: Pre-warmed Kubernetes pods for hot-path languages (Python, JS)
+- **Kubernetes Jobs**: Fallback for cold-path languages (Go, Rust, etc.)
+- **HTTP Sidecar Pattern**: Communication with pods via lightweight HTTP API
+- **Stateless Execution**: Each execution is isolated and ephemeral
+- **Session Persistence**: Optional state persistence for Python sessions
 
 For a deep dive into the system design, components, and request flows, see [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -128,12 +120,13 @@ See the [Supported Languages table](docs/ARCHITECTURE.md#supported-languages) fo
 
 The service is highly configurable via environment variables.
 
-| Category      | Description                                 |
-| ------------- | ------------------------------------------- |
-| **API**       | Host, port, and security settings.          |
-| **Storage**   | Redis and MinIO/S3 connection details.      |
-| **Resources** | Per-execution memory, CPU, and time limits. |
-| **Pools**     | Container pool sizing and warmup settings.  |
+| Category       | Description                                  |
+| -------------- | -------------------------------------------- |
+| **API**        | Host, port, and security settings.           |
+| **Storage**    | Redis and MinIO/S3 connection details.       |
+| **Resources**  | Per-execution memory, CPU, and time limits.  |
+| **Pod Pools**  | Per-language pool sizing and warmup settings.|
+| **Kubernetes** | Namespace, RBAC, and pod templates.          |
 
 A full list of configuration options and a production checklist can be found in [CONFIGURATION.md](docs/CONFIGURATION.md).
 
@@ -151,13 +144,12 @@ For comprehensive testing details, see [TESTING.md](docs/TESTING.md).
 
 ## Security
 
-- All code execution happens in isolated Docker containers
-- Network access is disabled by default (`network_mode: none`)
-- Containers run with read-only filesystem
-- All Linux capabilities are dropped (`cap_drop: ALL`)
-- `/tmp` is mounted as tmpfs with `noexec,nosuid` flags
-- `no-new-privileges` security option prevents privilege escalation
-- Resource limits prevent CPU, memory, and process exhaustion
+- All code execution happens in isolated Kubernetes pods
+- Network policies deny all egress by default
+- Pods run with non-root user (`runAsNonRoot: true`, `runAsUser: 1000`)
+- Resource limits enforced via Kubernetes (CPU, memory, ephemeral storage)
+- Pods destroyed immediately after execution (ephemeral)
+- RBAC restricts API pod permissions to pod/job management only
 - API key authentication protects all endpoints
 - Input validation prevents injection attacks
 

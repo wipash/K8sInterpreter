@@ -1,11 +1,17 @@
 """Redis configuration."""
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class RedisConfig(BaseSettings):
     """Redis connection settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     host: str = Field(default="localhost", alias="redis_host")
     port: int = Field(default=6379, ge=1, le=65535, alias="redis_port")
@@ -24,7 +30,3 @@ class RedisConfig(BaseSettings):
             return self.url
         password_part = f":{self.password}@" if self.password else ""
         return f"redis://{password_part}{self.host}:{self.port}/{self.db}"
-
-    class Config:
-        env_prefix = ""
-        extra = "ignore"

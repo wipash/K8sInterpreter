@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "librecodeinterpreter.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "librecodeinterpreter.labels" . | nindent 4 }}
+data:
+  # API Configuration
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  API_DEBUG: {{ .Values.api.debug | quote }}
+  LOG_LEVEL: {{ .Values.api.logLevel | quote }}
+  LOG_FORMAT: {{ .Values.api.logFormat | quote }}
+
+  # Kubernetes Configuration
+  K8S_NAMESPACE: {{ include "librecodeinterpreter.executionNamespace" . | quote }}
+  K8S_SERVICE_ACCOUNT: {{ include "librecodeinterpreter.executorServiceAccountName" . | quote }}
+  K8S_SIDECAR_IMAGE: {{ .Values.execution.sidecar.image | quote }}
+  K8S_SIDECAR_PORT: {{ .Values.execution.sidecar.port | quote }}
+  K8S_IMAGE_REGISTRY: {{ .Values.execution.imageRegistry | quote }}
+  K8S_IMAGE_TAG: {{ .Values.execution.imageTag | quote }}
+  K8S_IMAGE_PULL_POLICY: {{ .Values.execution.imagePullPolicy | quote }}
+  K8S_CPU_LIMIT: {{ .Values.execution.resources.limits.cpu | quote }}
+  K8S_MEMORY_LIMIT: {{ .Values.execution.resources.limits.memory | quote }}
+  K8S_CPU_REQUEST: {{ .Values.execution.resources.requests.cpu | quote }}
+  K8S_MEMORY_REQUEST: {{ .Values.execution.resources.requests.memory | quote }}
+  K8S_RUN_AS_USER: {{ .Values.execution.securityContext.runAsUser | quote }}
+  K8S_JOB_TTL_SECONDS: {{ .Values.execution.jobs.ttlSecondsAfterFinished | quote }}
+  K8S_JOB_DEADLINE_SECONDS: {{ .Values.execution.jobs.activeDeadlineSeconds | quote }}
+
+  # Pool Configuration
+  POD_POOL_ENABLED: "true"
+  POD_POOL_PY: {{ .Values.execution.languages.python.poolSize | quote }}
+  POD_POOL_JS: {{ .Values.execution.languages.javascript.poolSize | quote }}
+  POD_POOL_TS: {{ .Values.execution.languages.typescript.poolSize | quote }}
+  POD_POOL_GO: {{ .Values.execution.languages.go.poolSize | quote }}
+  POD_POOL_JAVA: {{ .Values.execution.languages.java.poolSize | quote }}
+  POD_POOL_RS: {{ .Values.execution.languages.rust.poolSize | quote }}
+  POD_POOL_C: {{ .Values.execution.languages.c.poolSize | quote }}
+  POD_POOL_CPP: {{ .Values.execution.languages.cpp.poolSize | quote }}
+  POD_POOL_PHP: {{ .Values.execution.languages.php.poolSize | quote }}
+  POD_POOL_R: {{ .Values.execution.languages.r.poolSize | quote }}
+  POD_POOL_F90: {{ .Values.execution.languages.fortran.poolSize | quote }}
+  POD_POOL_D: {{ .Values.execution.languages.d.poolSize | quote }}
+
+  # Per-language image overrides (optional - falls back to registry/tag pattern)
+  {{- if .Values.execution.languages.python.image }}
+  LANG_IMAGE_PY: {{ .Values.execution.languages.python.image | quote }}
+  {{- end }}
+  {{- if .Values.execution.languages.javascript.image }}
+  LANG_IMAGE_JS: {{ .Values.execution.languages.javascript.image | quote }}
+  {{- end }}
+  {{- if .Values.execution.languages.typescript.image }}
+  LANG_IMAGE_TS: {{ .Values.execution.languages.typescript.image | quote }}
+  {{- end }}
+  {{- if .Values.execution.languages.go.image }}
+  LANG_IMAGE_GO: {{ .Values.execution.languages.go.image | quote }}
+  {{- end }}
+  {{- if .Values.execution.languages.java.image }}
+  LANG_IMAGE_JAVA: {{ .Values.execution.languages.java.image | quote }}
+  {{- end }}
+  {{- if .Values.execution.languages.rust.image }}
+  LANG_IMAGE_RS: {{ .Values.execution.languages.rust.image | quote }}
+  {{- end }}
+  {{- if .Values.execution.languages.c.image }}
+  LANG_IMAGE_C: {{ .Values.execution.languages.c.image | quote }}
+  {{- end }}
+  {{- if .Values.execution.languages.cpp.image }}
+  LANG_IMAGE_CPP: {{ .Values.execution.languages.cpp.image | quote }}
+  {{- end }}
+  {{- if .Values.execution.languages.php.image }}
+  LANG_IMAGE_PHP: {{ .Values.execution.languages.php.image | quote }}
+  {{- end }}
+  {{- if .Values.execution.languages.r.image }}
+  LANG_IMAGE_R: {{ .Values.execution.languages.r.image | quote }}
+  {{- end }}
+  {{- if .Values.execution.languages.fortran.image }}
+  LANG_IMAGE_F90: {{ .Values.execution.languages.fortran.image | quote }}
+  {{- end }}
+  {{- if .Values.execution.languages.d.image }}
+  LANG_IMAGE_D: {{ .Values.execution.languages.d.image | quote }}
+  {{- end }}
+
+  # Execution Limits
+  MAX_EXECUTION_TIME: {{ .Values.execution.maxExecutionTime | quote }}
+
+  # State Persistence
+  STATE_PERSISTENCE_ENABLED: {{ .Values.state.enabled | quote }}
+  STATE_TTL_SECONDS: {{ .Values.state.ttlSeconds | quote }}
+  STATE_MAX_SIZE_MB: {{ .Values.state.maxSizeMb | quote }}
+
+  # MinIO/S3 Configuration
+  {{- if not .Values.secretsStore.enabled }}
+  # When using secretsStore, these values come from AWS Secrets Manager
+  MINIO_ENDPOINT: {{ .Values.minio.endpoint | quote }}
+  MINIO_BUCKET: {{ .Values.minio.bucket | quote }}
+  {{- end }}
+  MINIO_SECURE: {{ .Values.minio.secure | quote }}
+  MINIO_USE_IAM: {{ .Values.minio.useIAM | quote }}
+  {{- if .Values.minio.region }}
+  AWS_REGION: {{ .Values.minio.region | quote }}
+  MINIO_REGION: {{ .Values.minio.region | quote }}
+  {{- end }}

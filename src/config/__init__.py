@@ -9,29 +9,29 @@ Usage:
 
     # Access grouped settings
     settings.api.host
-    settings.docker.timeout
+    settings.kubernetes.namespace
     settings.redis.get_url()
 
     # Or use the backward-compatible flat access
     settings.api_host
-    settings.docker_timeout
+    settings.k8s_namespace
     settings.get_redis_url()
 """
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from pydantic import Field, validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Import grouped configurations
 from .api import APIConfig
-from .docker import DockerConfig
 from .redis import RedisConfig
 from .minio import MinIOConfig
 from .security import SecurityConfig
 from .resources import ResourcesConfig
 from .logging import LoggingConfig
+from .kubernetes import KubernetesConfig
 from .languages import (
     LANGUAGES,
     LanguageConfig,
@@ -103,35 +103,67 @@ class Settings(BaseSettings):
 
     # MinIO/S3 Configuration
     minio_endpoint: str = Field(default="localhost:9000")
-    minio_access_key: str = Field(default="test-access-key", min_length=3)
-    minio_secret_key: str = Field(default="test-secret-key", min_length=8)
+    minio_access_key: Optional[str] = Field(default=None)
+    minio_secret_key: Optional[str] = Field(default=None)
     minio_secure: bool = Field(default=False)
     minio_bucket: str = Field(default="code-interpreter-files")
     minio_region: str = Field(default="us-east-1")
+    minio_use_iam: bool = Field(
+        default=False,
+        description="Use IAM credentials instead of access key/secret key",
+    )
 
-    # Docker Configuration
-    docker_base_url: Optional[str] = Field(default=None)
-    docker_image_registry: str = Field(
-        default="code-interpreter",
-        description="Registry/namespace prefix for execution environment images",
+    # Kubernetes Configuration
+    k8s_namespace: str = Field(
+        default="",
+        description="Namespace for execution pods (empty = use API's namespace)",
     )
-    docker_image_tag: str = Field(
-        default="latest",
-        description="Tag for execution environment images (e.g. 'latest', 'dev')",
+    k8s_service_account: str = Field(
+        default="librecodeinterpreter-executor",
+        description="Service account for execution pods",
     )
-    docker_timeout: int = Field(default=60, ge=10)
-    docker_network_mode: str = Field(default="none")
-    docker_security_opt: List[str] = Field(
-        default_factory=lambda: ["no-new-privileges:true"]
+    k8s_sidecar_image: str = Field(
+        default="aronmuon/librecodeinterpreter-sidecar:latest",
+        description="Sidecar container image for pod communication",
     )
-    docker_cap_drop: List[str] = Field(default_factory=lambda: ["ALL"])
-    docker_read_only: bool = Field(default=True)
-    docker_tmpfs: Dict[str, str] = Field(
-        default_factory=lambda: {"/tmp": "rw,noexec,nosuid,size=100m"}
+    k8s_sidecar_port: int = Field(
+        default=8080, ge=1, le=65535, description="Sidecar HTTP API port"
     )
-    docker_seccomp_profile: Optional[str] = Field(
-        default="docker/seccomp-sandbox.json",
-        description="Path to seccomp profile JSON file (None to disable)",
+    k8s_cpu_limit: str = Field(default="1", description="CPU limit for execution pods")
+    k8s_memory_limit: str = Field(
+        default="512Mi", description="Memory limit for execution pods"
+    )
+    k8s_cpu_request: str = Field(
+        default="100m", description="CPU request for execution pods"
+    )
+    k8s_memory_request: str = Field(
+        default="128Mi", description="Memory request for execution pods"
+    )
+    k8s_run_as_user: int = Field(
+        default=1000, ge=1, description="UID to run containers as"
+    )
+    k8s_job_ttl_seconds: int = Field(
+        default=60,
+        ge=10,
+        le=3600,
+        description="TTL for completed Jobs before cleanup",
+    )
+    k8s_job_deadline_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        description="Maximum execution time for Jobs",
+    )
+    k8s_image_registry: str = Field(
+        default="aronmuon/librecodeinterpreter",
+        description="Container image registry prefix (images: {registry}-{language}:{tag})",
+    )
+    k8s_image_tag: str = Field(
+        default="latest", description="Container image tag for execution pods"
+    )
+    k8s_image_pull_policy: str = Field(
+        default="Always",
+        description="Image pull policy for execution pods (Always, IfNotPresent, Never)",
     )
 
     # Resource Limits - Execution
@@ -171,105 +203,67 @@ class Settings(BaseSettings):
     session_id_length: int = Field(default=32, ge=16, le=64)
     enable_orphan_minio_cleanup: bool = Field(default=False)
 
-    # Container Configuration
-    container_ttl_minutes: int = Field(default=5, ge=1, le=1440)
-    container_cleanup_interval_minutes: int = Field(default=5, ge=1, le=60)
+    # Pod Configuration
+    pod_ttl_minutes: int = Field(default=5, ge=1, le=1440)
+    pod_cleanup_interval_minutes: int = Field(default=5, ge=1, le=60)
 
-    # Container Pool Configuration
-    container_pool_enabled: bool = Field(default=True)
-    container_pool_warmup_on_startup: bool = Field(default=True)
-
-    # Session Container Reuse - DEPRECATED
-    # These settings are no longer used. Containers are now stateless:
-    # - Each execution gets a fresh container from pool
-    # - Containers are destroyed immediately after execution
-    # Kept for backward compatibility with existing configs
-    session_container_reuse_enabled: bool = Field(default=False)  # Deprecated, not used
-    session_container_ttl_seconds: int = Field(
-        default=0, ge=0, le=1800
-    )  # Deprecated, not used
+    # Pod Pool Configuration
+    pod_pool_enabled: bool = Field(default=True)
+    pod_pool_warmup_on_startup: bool = Field(default=True)
 
     # Per-language pool sizes (0 = on-demand only, no pre-warming)
-    container_pool_py: int = Field(
-        default=5, ge=0, le=50, description="Python pool size"
-    )
-    container_pool_js: int = Field(
-        default=2, ge=0, le=50, description="JavaScript pool size"
-    )
-    container_pool_ts: int = Field(
-        default=0, ge=0, le=50, description="TypeScript pool size"
-    )
-    container_pool_go: int = Field(default=0, ge=0, le=50, description="Go pool size")
-    container_pool_java: int = Field(
-        default=0, ge=0, le=50, description="Java pool size"
-    )
-    container_pool_c: int = Field(default=0, ge=0, le=50, description="C pool size")
-    container_pool_cpp: int = Field(default=0, ge=0, le=50, description="C++ pool size")
-    container_pool_php: int = Field(default=0, ge=0, le=50, description="PHP pool size")
-    container_pool_rs: int = Field(default=0, ge=0, le=50, description="Rust pool size")
-    container_pool_r: int = Field(default=0, ge=0, le=50, description="R pool size")
-    container_pool_f90: int = Field(
-        default=0, ge=0, le=50, description="Fortran pool size"
-    )
-    container_pool_d: int = Field(default=0, ge=0, le=50, description="D pool size")
+    pod_pool_py: int = Field(default=5, ge=0, le=50, description="Python pool size")
+    pod_pool_js: int = Field(default=2, ge=0, le=50, description="JavaScript pool size")
+    pod_pool_ts: int = Field(default=0, ge=0, le=50, description="TypeScript pool size")
+    pod_pool_go: int = Field(default=0, ge=0, le=50, description="Go pool size")
+    pod_pool_java: int = Field(default=0, ge=0, le=50, description="Java pool size")
+    pod_pool_c: int = Field(default=0, ge=0, le=50, description="C pool size")
+    pod_pool_cpp: int = Field(default=0, ge=0, le=50, description="C++ pool size")
+    pod_pool_php: int = Field(default=0, ge=0, le=50, description="PHP pool size")
+    pod_pool_rs: int = Field(default=0, ge=0, le=50, description="Rust pool size")
+    pod_pool_r: int = Field(default=0, ge=0, le=50, description="R pool size")
+    pod_pool_f90: int = Field(default=0, ge=0, le=50, description="Fortran pool size")
+    pod_pool_d: int = Field(default=0, ge=0, le=50, description="D pool size")
 
     # Pool Optimization Configuration
-    container_pool_parallel_batch: int = Field(
+    pod_pool_parallel_batch: int = Field(
         default=5,
         ge=1,
         le=10,
-        description="Number of containers to start in parallel during warmup",
+        description="Number of pods to start in parallel during warmup",
     )
-    container_pool_replenish_interval: int = Field(
+    pod_pool_replenish_interval: int = Field(
         default=2, ge=1, le=30, description="Seconds between pool replenishment checks"
     )
-    container_pool_exhaustion_trigger: bool = Field(
+    pod_pool_exhaustion_trigger: bool = Field(
         default=True,
         description="Trigger immediate replenishment when pool is exhausted",
     )
 
     # WAN Network Access Configuration
-    # When enabled, execution containers can access the public internet
-    # but are blocked from accessing host, other containers, and private networks
+    # When enabled, execution pods can access the public internet
+    # but are blocked from accessing host, other pods, and private networks
     enable_wan_access: bool = Field(
         default=False,
-        description="Enable WAN-only network access for execution containers",
+        description="Enable WAN-only network access for execution pods",
     )
     wan_network_name: str = Field(
         default="code-interpreter-wan",
-        description="Docker network name for WAN-access containers",
+        description="Network name for WAN-access pods",
     )
     wan_dns_servers: List[str] = Field(
         default_factory=lambda: ["8.8.8.8", "1.1.1.1", "8.8.4.4"],
-        description="Public DNS servers for WAN-access containers",
+        description="Public DNS servers for WAN-access pods",
     )
 
-    # Container Hardening Configuration
-    container_mask_host_info: bool = Field(
+    # Pod Hardening Configuration
+    pod_mask_host_info: bool = Field(
         default=True,
         description="Mask sensitive /proc paths to prevent host info leakage",
     )
-    container_generic_hostname: str = Field(
+    pod_generic_hostname: str = Field(
         default="sandbox",
-        description="Generic hostname for execution containers",
-    )
-
-    # REPL Configuration - Pre-warmed Python interpreter for sub-100ms execution
-    repl_enabled: bool = Field(
-        default=True,
-        description="Enable REPL mode for Python containers (pre-warmed interpreter)",
-    )
-    repl_warmup_timeout_seconds: int = Field(
-        default=15,
-        ge=5,
-        le=60,
-        description="Timeout for REPL server to become ready after container start",
-    )
-    repl_health_check_timeout_seconds: int = Field(
-        default=5,
-        ge=1,
-        le=30,
-        description="Timeout for REPL health check during warmup",
+        description="Generic hostname for execution pods",
     )
 
     # State Persistence Configuration - Python session state across executions
@@ -403,26 +397,29 @@ class Settings(BaseSettings):
     # Language Configuration - now uses LANGUAGES from languages.py
     supported_languages: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
-    @validator("supported_languages", pre=True, always=True)
-    def _set_supported_languages(cls, v, values):
+    @model_validator(mode="before")
+    @classmethod
+    def _set_supported_languages(cls, data):
         """Initialize supported_languages with registry-prefixed images."""
-        if v:
-            return v
+        if isinstance(data, dict):
+            if data.get("supported_languages"):
+                return data
 
-        registry = values.get("docker_image_registry", "code-interpreter")
-        tag = values.get("docker_image_tag", "latest")
-        return {
-            code: {
-                "image": (
-                    f"{registry}/{lang.image.rsplit(':', 1)[0]}:{tag}"
-                    if registry
-                    else f"{lang.image.rsplit(':', 1)[0]}:{tag}"
-                ),
-                "timeout_multiplier": lang.timeout_multiplier,
-                "memory_multiplier": lang.memory_multiplier,
+            registry = data.get("k8s_image_registry", "aronmuon/librecodeinterpreter")
+            tag = data.get("k8s_image_tag", "latest")
+            data["supported_languages"] = {
+                code: {
+                    "image": (
+                        f"{registry}-{lang.image.rsplit(':', 1)[0]}:{tag}"
+                        if registry
+                        else f"{lang.image.rsplit(':', 1)[0]}:{tag}"
+                    ),
+                    "timeout_multiplier": lang.timeout_multiplier,
+                    "memory_multiplier": lang.memory_multiplier,
+                }
+                for code, lang in LANGUAGES.items()
             }
-            for code, lang in LANGUAGES.items()
-        }
+        return data
 
     # Logging Configuration
     log_level: str = Field(default="INFO")
@@ -446,12 +443,14 @@ class Settings(BaseSettings):
     # VALIDATORS (preserved from original)
     # ========================================================================
 
-    @validator("api_keys")
+    @field_validator("api_keys", mode="before")
+    @classmethod
     def parse_api_keys(cls, v):
         """Parse comma-separated API keys into a list."""
         return [key.strip() for key in v.split(",") if key.strip()] if v else None
 
-    @validator("minio_endpoint")
+    @field_validator("minio_endpoint")
+    @classmethod
     def validate_minio_endpoint(cls, v):
         """Ensure MinIO endpoint doesn't include protocol."""
         if v.startswith(("http://", "https://")):
@@ -484,21 +483,6 @@ class Settings(BaseSettings):
         )
 
     @property
-    def docker(self) -> DockerConfig:
-        """Access Docker configuration group."""
-        return DockerConfig(
-            docker_base_url=self.docker_base_url,
-            docker_timeout=self.docker_timeout,
-            docker_network_mode=self.docker_network_mode,
-            docker_security_opt=self.docker_security_opt,
-            docker_cap_drop=self.docker_cap_drop,
-            docker_read_only=self.docker_read_only,
-            docker_tmpfs=self.docker_tmpfs,
-            container_ttl_minutes=self.container_ttl_minutes,
-            container_cleanup_interval_minutes=self.container_cleanup_interval_minutes,
-        )
-
-    @property
     def redis(self) -> RedisConfig:
         """Access Redis configuration group."""
         return RedisConfig(
@@ -522,6 +506,7 @@ class Settings(BaseSettings):
             minio_secure=self.minio_secure,
             minio_bucket=self.minio_bucket,
             minio_region=self.minio_region,
+            minio_use_iam=self.minio_use_iam,
         )
 
     @property
@@ -576,6 +561,83 @@ class Settings(BaseSettings):
             health_check_timeout=self.health_check_timeout,
         )
 
+    @property
+    def kubernetes(self) -> KubernetesConfig:
+        """Access Kubernetes configuration group."""
+        return KubernetesConfig(
+            namespace=self.k8s_namespace,
+            service_account=self.k8s_service_account,
+            sidecar_image=self.k8s_sidecar_image,
+            sidecar_port=self.k8s_sidecar_port,
+            cpu_limit=self.k8s_cpu_limit,
+            memory_limit=self.k8s_memory_limit,
+            cpu_request=self.k8s_cpu_request,
+            memory_request=self.k8s_memory_request,
+            run_as_user=self.k8s_run_as_user,
+            job_ttl_seconds_after_finished=self.k8s_job_ttl_seconds,
+            job_active_deadline_seconds=self.k8s_job_deadline_seconds,
+            image_registry=self.k8s_image_registry,
+            image_tag=self.k8s_image_tag,
+        )
+
+    def get_pool_configs(self):
+        """Get pool configurations for all languages.
+
+        Returns list of PoolConfig for all configured languages.
+        """
+        import os
+        from ..services.kubernetes.models import PoolConfig
+
+        configs = []
+        pool_sizes = {
+            "py": self.pod_pool_py,
+            "js": self.pod_pool_js,
+            "ts": self.pod_pool_ts,
+            "go": self.pod_pool_go,
+            "java": self.pod_pool_java,
+            "c": self.pod_pool_c,
+            "cpp": self.pod_pool_cpp,
+            "php": self.pod_pool_php,
+            "rs": self.pod_pool_rs,
+            "r": self.pod_pool_r,
+            "f90": self.pod_pool_f90,
+            "d": self.pod_pool_d,
+        }
+
+        # Per-language image overrides from environment (LANG_IMAGE_<LANG>)
+        # Falls back to auto-generated registry/tag pattern if not set
+        image_overrides = {
+            "py": os.getenv("LANG_IMAGE_PY"),
+            "js": os.getenv("LANG_IMAGE_JS"),
+            "ts": os.getenv("LANG_IMAGE_TS"),
+            "go": os.getenv("LANG_IMAGE_GO"),
+            "java": os.getenv("LANG_IMAGE_JAVA"),
+            "c": os.getenv("LANG_IMAGE_C"),
+            "cpp": os.getenv("LANG_IMAGE_CPP"),
+            "php": os.getenv("LANG_IMAGE_PHP"),
+            "rs": os.getenv("LANG_IMAGE_RS"),
+            "r": os.getenv("LANG_IMAGE_R"),
+            "f90": os.getenv("LANG_IMAGE_F90"),
+            "d": os.getenv("LANG_IMAGE_D"),
+        }
+
+        for lang, pool_size in pool_sizes.items():
+            # Use explicit image override if set, otherwise auto-generate
+            image = image_overrides.get(lang) or self.kubernetes.get_image_for_language(lang)
+            configs.append(
+                PoolConfig(
+                    language=lang,
+                    image=image,
+                    pool_size=pool_size,
+                    sidecar_image=self.k8s_sidecar_image,
+                    cpu_limit=self.k8s_cpu_limit,
+                    memory_limit=self.k8s_memory_limit,
+                    image_pull_policy=self.k8s_image_pull_policy,
+                )
+            )
+
+        return configs
+
     # ========================================================================
     # HELPER METHODS (preserved from original)
     # ========================================================================
@@ -610,7 +672,7 @@ class Settings(BaseSettings):
         return self.supported_languages.get(language, {})
 
     def get_image_for_language(self, code: str) -> str:
-        """Get Docker image for a language."""
+        """Get container image for a language."""
         config = self.get_language_config(code)
         if config and "image" in config:
             return config["image"]
@@ -618,9 +680,7 @@ class Settings(BaseSettings):
         # Fallback to languages.py logic if not in settings
         from .languages import get_image_for_language as get_img
 
-        return get_img(
-            code, registry=self.docker_image_registry, tag=self.docker_image_tag
-        )
+        return get_img(code, registry=self.k8s_image_registry, tag=self.k8s_image_tag)
 
     def get_execution_timeout(self, language: str) -> int:
         """Get execution timeout for a specific language."""
@@ -635,10 +695,6 @@ class Settings(BaseSettings):
     def get_session_ttl_minutes(self) -> int:
         """Get session TTL in minutes for backward compatibility."""
         return self.session_ttl_hours * 60
-
-    def get_container_ttl_minutes(self) -> int:
-        """Get container TTL in minutes."""
-        return self.container_ttl_minutes
 
     def is_file_allowed(self, filename: str) -> bool:
         """Check if a file is allowed based on extension and patterns."""
@@ -664,12 +720,12 @@ __all__ = [
     "settings",
     # Grouped configs
     "APIConfig",
-    "DockerConfig",
     "RedisConfig",
     "MinIOConfig",
     "SecurityConfig",
     "ResourcesConfig",
     "LoggingConfig",
+    "KubernetesConfig",
     # Language configuration
     "LANGUAGES",
     "LanguageConfig",

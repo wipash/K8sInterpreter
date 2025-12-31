@@ -1,12 +1,12 @@
 """Event-driven cleanup scheduler with state archival.
 
-This module provides event-driven cleanup that schedules container and resource
+This module provides event-driven cleanup that schedules pod and resource
 cleanup shortly after execution completes, rather than relying solely on polling.
 
-Note: With the simplified pool (no session tracking), containers are destroyed
+Note: With the simplified pool (no session tracking), pods are destroyed
 immediately after execution by the orchestrator. This scheduler handles:
 - File cleanup when sessions are explicitly deleted
-- Legacy cleanup for non-pooled containers
+- Legacy cleanup for non-pooled pods
 - Periodic state archival from Redis to MinIO
 """
 
@@ -24,8 +24,8 @@ logger = structlog.get_logger(__name__)
 class CleanupScheduler:
     """Schedules cleanup operations after execution events.
 
-    With the simplified container pool architecture:
-    - Containers are destroyed immediately after execution (no TTL tracking)
+    With the simplified pod pool architecture:
+    - Pods are destroyed immediately after execution (no TTL tracking)
     - This scheduler handles file cleanup and session-level resource cleanup
     - Periodic state archival from Redis to MinIO
     """
@@ -54,14 +54,14 @@ class CleanupScheduler:
         self._file_service = file_service
         self._state_archival_service = state_archival_service
 
-    def set_container_pool(self, pool):
-        """Set container pool reference (kept for backward compatibility).
+    def set_kubernetes_manager(self, manager):
+        """Set Kubernetes manager reference.
 
-        Note: With simplified pool, containers are destroyed immediately
-        after execution. Pool reference is no longer used for cleanup.
+        Note: With simplified pool, pods are destroyed immediately
+        after execution. Manager reference is no longer used for cleanup.
         """
         logger.info(
-            "Cleanup scheduler initialized (containers destroyed after each execution)"
+            "Cleanup scheduler initialized (pods destroyed after each execution)"
         )
 
     def start(self):
@@ -109,15 +109,15 @@ class CleanupScheduler:
     async def _on_execution_completed(self, event: ExecutionCompleted):
         """Handle execution completed event.
 
-        With simplified pool, containers are destroyed immediately by orchestrator.
+        With simplified pool, pods are destroyed immediately by orchestrator.
         This handler just logs the event for metrics purposes.
         """
         session_id = event.session_id
 
-        # Containers are now destroyed immediately after execution
-        # No deferred cleanup needed for containers
+        # Pods are now destroyed immediately after execution
+        # No deferred cleanup needed for pods
         logger.debug(
-            "Execution completed (container already destroyed)",
+            "Execution completed (pod already destroyed)",
             session_id=session_id[:12] if session_id else None,
             execution_id=event.execution_id[:8] if event.execution_id else None,
         )

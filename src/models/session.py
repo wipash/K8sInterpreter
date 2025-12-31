@@ -43,11 +43,9 @@ class Session(BaseModel):
     )
     expires_at: datetime = Field(..., description="Session expiration timestamp")
 
-    # Container information
-    container_id: Optional[str] = Field(default=None, description="Docker container ID")
-    container_status: Optional[str] = Field(
-        default=None, description="Container status"
-    )
+    # Pod information
+    pod_name: Optional[str] = Field(default=None, description="Kubernetes pod name")
+    pod_status: Optional[str] = Field(default=None, description="Pod status")
 
     # File management
     files: Dict[str, FileInfo] = Field(

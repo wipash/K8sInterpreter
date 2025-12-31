@@ -2,7 +2,6 @@
 """Performance testing script for Code Interpreter API.
 
 Compares latency, throughput, and resource usage between versions.
-Includes complexity-based baseline testing for REPL optimization.
 """
 
 import asyncio
@@ -489,7 +488,7 @@ def save_baseline_results(results: Dict[str, Dict[str, Any]], filename: str = "b
     """Save baseline results to JSON file."""
     output = {
         "timestamp": datetime.now().isoformat(),
-        "description": "Complexity-based baseline testing for REPL optimization",
+        "description": "Complexity-based baseline testing",
         "results": results,
     }
 
@@ -564,7 +563,7 @@ async def main_baseline(num_requests: int = 5):
     print("\n" + "=" * 70)
     print("  BASELINE TESTING COMPLETE")
     print("=" * 70)
-    print("\n  Use these results to compare after REPL optimization:")
+    print("\n  Use these results to compare after optimization:")
     print("  - Pure interpreter startup time (minimal test)")
     print("  - Package import overhead (numpy, pandas, matplotlib)")
     print("  - File generation overhead (matplotlib, opencv)")
@@ -577,7 +576,7 @@ def print_usage():
 Usage: python perf_test.py [OPTIONS]
 
 Options:
-  --baseline       Run complexity-based baseline testing (recommended before REPL optimization)
+  --baseline       Run complexity-based baseline testing (recommended before optimization)
   --baseline=N     Run baseline with N requests per level (default: 5)
   --old            Compare with old version results
   (no args)        Run standard performance comparison tests

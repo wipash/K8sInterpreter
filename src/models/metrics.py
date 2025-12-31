@@ -56,7 +56,6 @@ class DetailedExecutionMetrics:
     memory_peak_mb: Optional[float] = None
     cpu_time_ms: Optional[float] = None
     container_source: str = "pool_hit"  # pool_hit, pool_miss, pool_disabled
-    repl_mode: bool = False
     files_uploaded: int = 0
     files_generated: int = 0
     output_size_bytes: int = 0
@@ -77,7 +76,6 @@ class DetailedExecutionMetrics:
             "memory_peak_mb": self.memory_peak_mb,
             "cpu_time_ms": self.cpu_time_ms,
             "container_source": self.container_source,
-            "repl_mode": self.repl_mode,
             "files_uploaded": self.files_uploaded,
             "files_generated": self.files_generated,
             "output_size_bytes": self.output_size_bytes,
@@ -106,7 +104,6 @@ class DetailedExecutionMetrics:
             memory_peak_mb=data.get("memory_peak_mb"),
             cpu_time_ms=data.get("cpu_time_ms"),
             container_source=data.get("container_source", "pool_hit"),
-            repl_mode=data.get("repl_mode", False),
             files_uploaded=data.get("files_uploaded", 0),
             files_generated=data.get("files_generated", 0),
             output_size_bytes=data.get("output_size_bytes", 0),
@@ -129,7 +126,6 @@ class LanguageMetrics:
     avg_execution_time_ms: float = 0
     avg_memory_mb: float = 0
     error_rate: float = 0.0  # Percentage (0-100)
-    repl_mode_count: int = 0  # Executions using REPL
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -144,7 +140,6 @@ class LanguageMetrics:
             "avg_execution_time_ms": self.avg_execution_time_ms,
             "avg_memory_mb": self.avg_memory_mb,
             "error_rate": self.error_rate,
-            "repl_mode_count": self.repl_mode_count,
         }
 
 

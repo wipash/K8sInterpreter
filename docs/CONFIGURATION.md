@@ -164,21 +164,25 @@ MinIO provides S3-compatible object storage for files.
 | `MINIO_BUCKET`     | `code-interpreter-files` | Bucket name for file storage        |
 | `MINIO_REGION`     | `us-east-1`              | MinIO region                        |
 
-### Docker Configuration
+### Kubernetes Configuration
 
-Docker is used for secure code execution in containers.
+Kubernetes is used for secure code execution in isolated pods.
 
-| Variable              | Default | Description                                  |
-| --------------------- | ------- | -------------------------------------------- |
-| `DOCKER_BASE_URL`     | -       | Docker daemon URL (auto-detected if not set) |
-| `DOCKER_TIMEOUT`      | `60`    | Docker operation timeout (seconds)           |
-| `DOCKER_NETWORK_MODE` | `none`  | Container network mode                       |
-| `DOCKER_READ_ONLY`    | `true`  | Mount container filesystem as read-only      |
+| Variable               | Default                  | Description                                       |
+| ---------------------- | ------------------------ | ------------------------------------------------- |
+| `K8S_NAMESPACE`        | (auto-detected)          | Namespace for execution pods                      |
+| `K8S_SIDECAR_IMAGE`    | -                        | HTTP sidecar image for pod communication          |
+| `K8S_IMAGE_REGISTRY`   | -                        | Registry for language execution images            |
+| `K8S_CPU_LIMIT`        | `1`                      | CPU limit per execution pod                       |
+| `K8S_MEMORY_LIMIT`     | `512Mi`                  | Memory limit per execution pod                    |
+| `K8S_CPU_REQUEST`      | `100m`                   | CPU request per execution pod                     |
+| `K8S_MEMORY_REQUEST`   | `128Mi`                  | Memory request per execution pod                  |
 
 **Security Notes:**
 
-- `DOCKER_NETWORK_MODE=none` provides maximum isolation
-- `DOCKER_READ_ONLY=true` prevents container filesystem modifications
+- Pods run with `runAsNonRoot: true` and `runAsUser: 1000`
+- Network policies deny all egress by default
+- Pods are destroyed immediately after execution
 
 ### Resource Limits
 
@@ -217,32 +221,22 @@ Docker is used for secure code execution in containers.
 | `SESSION_CLEANUP_INTERVAL_MINUTES` | `60`    | Cleanup interval (minutes)   |
 | `SESSION_ID_LENGTH`                | `32`    | Session ID length            |
 
-### Container Pool Configuration
+### Pod Pool Configuration
 
-Pre-warmed containers significantly reduce execution latency by eliminating cold start time.
+Pre-warmed Kubernetes pods significantly reduce execution latency by eliminating cold start time.
 
-| Variable                           | Default | Description                            |
-| ---------------------------------- | ------- | -------------------------------------- |
-| `CONTAINER_POOL_ENABLED`           | `true`  | Enable container pooling               |
-| `CONTAINER_POOL_MIN_SIZE`          | `2`     | Default minimum pool size per language |
-| `CONTAINER_POOL_MAX_SIZE`          | `15`    | Default maximum pool size per language |
-| `CONTAINER_POOL_WARMUP_ON_STARTUP` | `true`  | Pre-warm containers at startup         |
-| `CONTAINER_POOL_PY_MIN`            | `5`     | Minimum Python containers in pool      |
-| `CONTAINER_POOL_PY_MAX`            | `20`    | Maximum Python containers in pool      |
-| `CONTAINER_POOL_JS_MIN`            | `2`     | Minimum JavaScript containers in pool  |
-| `CONTAINER_POOL_JS_MAX`            | `8`     | Maximum JavaScript containers in pool  |
+| Variable                     | Default | Description                                |
+| ---------------------------- | ------- | ------------------------------------------ |
+| `POD_POOL_ENABLED`           | `true`  | Enable pod pooling                         |
+| `POD_POOL_WARMUP_ON_STARTUP` | `true`  | Pre-warm pods at startup                   |
+| `POD_POOL_PY`                | `5`     | Python pod pool size (0 = use Jobs)        |
+| `POD_POOL_JS`                | `2`     | JavaScript pod pool size                   |
+| `POD_POOL_TS`                | `0`     | TypeScript pool size (0 = use Jobs)        |
+| `POD_POOL_GO`                | `0`     | Go pool size (0 = use Jobs)                |
+| `POD_POOL_JAVA`              | `0`     | Java pool size (0 = use Jobs)              |
+| `POD_POOL_RS`                | `0`     | Rust pool size (0 = use Jobs)              |
 
-**Note:** Containers are destroyed immediately after execution - there is no TTL-based cleanup. The pool is automatically replenished in the background.
-
-### REPL Configuration (Python Fast Execution)
-
-REPL mode keeps a Python interpreter running inside pooled containers with common libraries pre-imported, reducing execution latency from ~3,500ms to ~20-40ms.
-
-| Variable                            | Default | Description                             |
-| ----------------------------------- | ------- | --------------------------------------- |
-| `REPL_ENABLED`                      | `true`  | Enable pre-warmed Python REPL           |
-| `REPL_WARMUP_TIMEOUT_SECONDS`       | `15`    | Timeout for REPL server to become ready |
-| `REPL_HEALTH_CHECK_TIMEOUT_SECONDS` | `5`     | Timeout for REPL health checks          |
+**Note:** Languages with `poolSize = 0` use Kubernetes Jobs for execution (3-10s cold start). Pods are destroyed immediately after execution and the pool is automatically replenished in the background.
 
 ### State Persistence Configuration (Python)
 
@@ -374,8 +368,8 @@ if validate_configuration():
 - [ ] Change default API key to a secure random value
 - [ ] Enable network isolation (`ENABLE_NETWORK_ISOLATION=true`)
 - [ ] Enable filesystem isolation (`ENABLE_FILESYSTEM_ISOLATION=true`)
-- [ ] Set Docker network mode to `none`
-- [ ] Enable read-only container filesystems
+- [ ] Deploy Kubernetes NetworkPolicy to deny egress
+- [ ] Configure pod security context (non-root user)
 - [ ] Review and adjust resource limits
 
 ### Performance
@@ -384,8 +378,7 @@ if validate_configuration():
 - [ ] Configure Redis connection pooling
 - [ ] Set reasonable execution timeouts
 - [ ] Configure log rotation
-- [ ] Enable REPL mode for Python (`REPL_ENABLED=true`)
-- [ ] Configure container pool sizes based on language usage
+- [ ] Configure pod pool sizes based on language usage
 - [ ] Review state persistence TTL settings
 
 ### State Persistence (Python)
@@ -406,7 +399,7 @@ if validate_configuration():
 
 - [ ] Secure Redis with authentication
 - [ ] Secure MinIO with proper access keys
-- [ ] Configure Docker daemon security
+- [ ] Configure Kubernetes RBAC for API service account
 - [ ] Set up backup for Redis and MinIO data
 
 ## Troubleshooting
@@ -431,10 +424,10 @@ python config_manager.py validate
    - Check access key and secret key
    - Ensure bucket exists or can be created
 
-3. **Docker Connection Failed**
-   - Verify Docker daemon is running
-   - Check Docker socket permissions
-   - Ensure user has Docker access
+3. **Kubernetes Connection Failed**
+   - Verify Kubernetes cluster is accessible
+   - Check kubeconfig or in-cluster authentication
+   - Ensure API service account has required RBAC permissions
 
 4. **Resource Limit Errors**
    - Check system resources available

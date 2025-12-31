@@ -6,85 +6,78 @@ This document provides performance benchmarks, tuning recommendations, and monit
 
 ### Baseline Metrics (With Optimizations)
 
-The following metrics represent typical performance with all optimizations enabled (container pooling, REPL mode):
+The following metrics represent typical performance with all optimizations enabled (pod pooling, HTTP sidecar):
 
-| Metric                         | Value      | Notes                           |
-| ------------------------------ | ---------- | ------------------------------- |
-| **Python execution (simple)**  | 20-40ms    | With REPL mode                  |
-| **Python execution (complex)** | 50-200ms   | Depends on code complexity      |
-| **JavaScript execution**       | 50-100ms   | With container pool             |
-| **Container acquisition**      | ~3ms       | From pre-warmed pool            |
-| **Cold start (no pool)**       | 500-2000ms | First request or pool exhausted |
-| **State serialization**        | 1-25ms     | Depends on state size           |
-| **File upload (1MB)**          | 50-100ms   | To MinIO                        |
+| Metric                         | Value      | Notes                            |
+| ------------------------------ | ---------- | -------------------------------- |
+| **Python execution (simple)**  | 50-100ms   | With warm pod pool               |
+| **Python execution (complex)** | 100-300ms  | Depends on code complexity       |
+| **JavaScript execution**       | 50-150ms   | With pod pool                    |
+| **Pod acquisition**            | ~50-100ms  | From pre-warmed pool             |
+| **Cold start (Jobs)**          | 3-10s      | Languages with poolSize=0        |
+| **State serialization**        | 1-25ms     | Depends on state size            |
+| **File upload (1MB)**          | 50-100ms   | To MinIO                         |
 
 ### Performance Comparison
 
-| Configuration         | Python Simple | Notes                    |
-| --------------------- | ------------- | ------------------------ |
-| REPL + Pool (default) | 20-40ms       | 100x faster              |
-| Pool only (no REPL)   | 200-500ms     | Pool warmup only         |
-| No optimizations      | 3,000-4,000ms | Cold start every request |
+| Configuration            | Python Simple | Notes                         |
+| ------------------------ | ------------- | ----------------------------- |
+| Warm Pod Pool (default)  | 50-100ms      | ~85% P99 latency reduction    |
+| Kubernetes Jobs          | 3-10s         | Cold start for each request   |
 
 ---
 
 ## Optimization Features
 
-### 1. Container Pool
+### 1. Pod Pool
 
-Pre-warmed containers eliminate cold start latency:
+Pre-warmed Kubernetes pods eliminate cold start latency:
 
 ```
-Without Pool:
-Request → Create Container → Start → Execute → Destroy
-         [~500-2000ms]      [~100ms] [~50ms]   [~50ms]
-         Total: ~700-2200ms
+Without Pool (Jobs):
+Request → Create Job → Pod Scheduled → Start → Execute → Cleanup
+         [~1-3s]       [~1-2s]         [~1s]   [~50ms]   [~1s]
+         Total: ~3-10s
 
 With Pool:
-Request → Acquire from Pool → Execute → Destroy → (Background: Replenish)
-         [~3ms]              [~50ms]   [~50ms]
-         Total: ~100ms
+Request → Acquire from Pool → Execute via Sidecar → Destroy → (Background: Replenish)
+         [~10-50ms]           [~50-100ms]           [~50ms]
+         Total: ~100-200ms
 ```
 
 **Configuration:**
 
 ```bash
-CONTAINER_POOL_ENABLED=true
-CONTAINER_POOL_MIN_SIZE=2           # Default per language
-CONTAINER_POOL_MAX_SIZE=15          # Default per language
-CONTAINER_POOL_PY_MIN=5             # Python-specific minimum
-CONTAINER_POOL_PY_MAX=20            # Python-specific maximum
+POD_POOL_ENABLED=true
+POD_POOL_WARMUP_ON_STARTUP=true
+POD_POOL_PY=5                       # Python pool size
+POD_POOL_JS=2                       # JavaScript pool size
+# Languages with poolSize=0 use Kubernetes Jobs
 ```
 
-### 2. REPL Mode (Python)
+### 2. HTTP Sidecar Communication
 
-Pre-warmed Python interpreter with common libraries:
+Each execution pod has an HTTP sidecar that handles communication:
 
 ```
-Without REPL:
-Request → Python startup → Import libs → Execute → Output
-         [~2000ms]        [~1000ms]      [~50ms]   [~10ms]
-         Total: ~3060ms
-
-With REPL:
-Request → Send to REPL → Execute → Output
-         [~5ms]         [~25ms]   [~5ms]
-         Total: ~35ms
+Request Flow:
+API → HTTP POST to Sidecar → Sidecar executes code → Response
+      [~5-10ms]              [~50-100ms]              [~5ms]
+      Total: ~60-115ms
 ```
 
-**Pre-imported libraries:**
+**Sidecar Endpoints:**
+
+- `POST /execute` - Execute code with optional state
+- `POST /files` - Upload files to shared volume
+- `GET /files` - List/download generated files
+- `GET /health` - Health check
+
+**Pre-imported libraries (Python):**
 
 - numpy, pandas, matplotlib, scipy
 - sklearn, statsmodels
 - json, csv, datetime, collections
-
-**Configuration:**
-
-```bash
-REPL_ENABLED=true
-REPL_WARMUP_TIMEOUT_SECONDS=15
-REPL_HEALTH_CHECK_TIMEOUT_SECONDS=5
-```
 
 ### 3. Connection Pooling
 
@@ -102,33 +95,33 @@ REDIS_SOCKET_CONNECT_TIMEOUT=5
 
 ### Pool Size Recommendations
 
-| Usage Pattern          | Python Min/Max | JS Min/Max | Other Min/Max |
-| ---------------------- | -------------- | ---------- | ------------- |
-| Light (< 10 req/min)   | 2/5            | 1/3        | 1/2           |
-| Medium (10-50 req/min) | 5/15           | 2/8        | 2/5           |
-| Heavy (> 50 req/min)   | 10/30          | 5/15       | 3/10          |
+| Usage Pattern          | Python Pool | JS Pool | Other Languages |
+| ---------------------- | ----------- | ------- | --------------- |
+| Light (< 10 req/min)   | 2           | 1       | 0 (use Jobs)    |
+| Medium (10-50 req/min) | 5           | 2       | 0 (use Jobs)    |
+| Heavy (> 50 req/min)   | 10          | 5       | 2               |
 
 **Trade-offs:**
 
-- Higher min = more memory usage, faster warm responses
-- Higher max = handles bursts better, more resource usage
+- Higher pool size = more cluster resources, faster responses
+- Pool size of 0 = use Kubernetes Jobs (3-10s cold start)
 
 ### Memory Allocation
 
-Each container uses memory:
+Each execution pod uses memory:
 
-| Language          | Base Memory | With Code | Recommendation |
-| ----------------- | ----------- | --------- | -------------- |
-| Python (REPL)     | ~150MB      | 200-500MB | 512MB limit    |
-| Python (standard) | ~50MB       | 100-300MB | 512MB limit    |
-| JavaScript        | ~50MB       | 100-200MB | 256MB limit    |
-| Go                | ~20MB       | 50-150MB  | 256MB limit    |
-| Java              | ~100MB      | 200-400MB | 512MB limit    |
+| Language          | Base Memory | With Code | Recommendation    |
+| ----------------- | ----------- | --------- | ----------------- |
+| Python            | ~150MB      | 200-500MB | 512Mi limit       |
+| JavaScript        | ~50MB       | 100-200MB | 256Mi limit       |
+| Go                | ~20MB       | 50-150MB  | 256Mi limit       |
+| Java              | ~100MB      | 200-400MB | 512Mi limit       |
 
 **Configuration:**
 
 ```bash
-MAX_MEMORY_MB=512  # Default per container
+K8S_MEMORY_LIMIT=512Mi      # Default per pod
+K8S_MEMORY_REQUEST=128Mi    # Request per pod
 ```
 
 ### State Persistence Tuning
@@ -150,7 +143,7 @@ STATE_TTL_SECONDS=14400  # 4 hours
 
 ## Latency Breakdown
 
-### Typical Python Request (REPL mode)
+### Typical Python Request (Pod Pool)
 
 ```
 Component                   Time
@@ -159,13 +152,13 @@ Request parsing             ~1ms
 Authentication              ~1ms
 Session lookup              ~2ms
 State load (if exists)      ~3ms
-Container acquire           ~3ms
-REPL communication          ~5ms
-Code execution              ~20ms
+Pod acquire from pool       ~10-50ms
+HTTP sidecar communication  ~5ms
+Code execution              ~50ms
 State save                  ~3ms
 Response building           ~2ms
 ──────────────────────────────────
-Total                       ~40ms
+Total                       ~80-120ms
 ```
 
 ### Request with File Operations
@@ -176,15 +169,15 @@ Component                   Time
 Request parsing             ~1ms
 Authentication              ~1ms
 Session lookup              ~2ms
-File upload to container    ~10ms (1MB file)
-Container acquire           ~3ms
+File upload to pod          ~10ms (1MB file)
+Pod acquire from pool       ~10-50ms
 Code execution              ~50ms
 Output file detection       ~5ms
-File download from container ~10ms
+File download from pod      ~10ms
 MinIO upload                ~20ms
 Response building           ~2ms
 ──────────────────────────────────
-Total                       ~104ms
+Total                       ~115-155ms
 ```
 
 ---
@@ -205,28 +198,28 @@ The API handles concurrent requests efficiently:
 
 **Bottlenecks at high concurrency:**
 
-1. Container pool exhaustion (wait for replenishment)
+1. Pod pool exhaustion (wait for replenishment)
 2. Redis connection pool saturation
-3. Docker daemon throughput
+3. Kubernetes API server throughput
 
 ### Horizontal Scaling
 
 For high-throughput deployments:
 
-1. **Multiple API instances**: Load balance across instances
-2. **Shared Redis**: All instances use same Redis for sessions/state
-3. **Shared MinIO**: All instances use same MinIO for files
-4. **Separate Docker hosts**: Distribute container load
+1. **Multiple API replicas**: Use Kubernetes Deployment with HPA
+2. **Shared Redis**: All replicas use same Redis for sessions/state
+3. **Shared MinIO**: All replicas use same MinIO for files
+4. **Node autoscaling**: Enable cluster autoscaler for execution pods
 
 ```
                     ┌─────────────────┐
-                    │  Load Balancer  │
+                    │  K8s Ingress    │
                     └────────┬────────┘
              ┌───────────────┼───────────────┐
              ▼               ▼               ▼
       ┌──────────┐    ┌──────────┐    ┌──────────┐
-      │  API 1   │    │  API 2   │    │  API 3   │
-      │+ Docker  │    │+ Docker  │    │+ Docker  │
+      │  API     │    │  API     │    │  API     │
+      │  Pod 1   │    │  Pod 2   │    │  Pod 3   │
       └────┬─────┘    └────┬─────┘    └────┬─────┘
            │               │               │
            └───────────────┼───────────────┘
@@ -238,12 +231,12 @@ For high-throughput deployments:
 
 ### Resource Planning
 
-| Daily Requests | Instances | Pool Size (per) | Redis Memory | MinIO Storage |
-| -------------- | --------- | --------------- | ------------ | ------------- |
-| 1,000          | 1         | 5 Python        | 256MB        | 1GB           |
-| 10,000         | 2         | 10 Python       | 512MB        | 5GB           |
-| 100,000        | 5         | 15 Python       | 2GB          | 20GB          |
-| 1,000,000      | 20        | 20 Python       | 8GB          | 100GB         |
+| Daily Requests | API Replicas | Pod Pool Size | Redis Memory | MinIO Storage |
+| -------------- | ------------ | ------------- | ------------ | ------------- |
+| 1,000          | 1            | 5 Python      | 256MB        | 1GB           |
+| 10,000         | 2            | 10 Python     | 512MB        | 5GB           |
+| 100,000        | 5            | 15 Python     | 2GB          | 20GB          |
+| 1,000,000      | 20           | 20 Python     | 8GB          | 100GB         |
 
 ---
 
@@ -311,7 +304,7 @@ Recommended alert conditions:
    curl https://localhost/metrics | jq '.pool'
    ```
 
-   If pool is frequently exhausted, increase `CONTAINER_POOL_MAX_SIZE`.
+   If pool is frequently exhausted, increase `POD_POOL_PY`.
 
 2. **Check Redis latency**:
 
@@ -321,40 +314,40 @@ Recommended alert conditions:
 
    If > 10ms, consider Redis tuning or dedicated instance.
 
-3. **Check REPL health**:
+3. **Check pod health**:
    ```bash
-   curl https://localhost/health/detailed | jq '.repl'
+   kubectl -n librecodeinterpreter get pods -l app.kubernetes.io/managed-by=librecodeinterpreter
    ```
-   If unhealthy, check REPL server logs in containers.
+   If pods are unhealthy, check logs with `kubectl logs`.
 
 ### Pool Exhaustion
 
 1. **Increase pool size**:
 
    ```bash
-   CONTAINER_POOL_MAX_SIZE=30
-   CONTAINER_POOL_PY_MAX=40
+   POD_POOL_PY=10
+   POD_POOL_JS=5
    ```
 
 2. **Check for slow executions**:
-   Long-running code blocks containers. Consider timeout reduction:
+   Long-running code blocks pods. Consider timeout reduction:
 
    ```bash
    MAX_EXECUTION_TIME=15
    ```
 
-3. **Check container cleanup**:
-   Containers should be destroyed immediately. Check for zombie containers:
+3. **Check pod cleanup**:
+   Pods should be destroyed immediately. Check for orphaned pods:
    ```bash
-   docker ps -a --filter "label=com.code-interpreter.managed=true"
+   kubectl -n librecodeinterpreter get pods -l app.kubernetes.io/managed-by=librecodeinterpreter
    ```
 
 ### Memory Issues
 
-1. **Check container memory**:
+1. **Check pod memory**:
 
    ```bash
-   docker stats --no-stream
+   kubectl top pods -n librecodeinterpreter
    ```
 
 2. **Reduce state size limit**:
@@ -397,5 +390,4 @@ The script tests:
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture
 - [CONFIGURATION.md](CONFIGURATION.md) - All configuration options
-- [REPL.md](REPL.md) - REPL server details
 - [STATE_PERSISTENCE.md](STATE_PERSISTENCE.md) - State persistence guide

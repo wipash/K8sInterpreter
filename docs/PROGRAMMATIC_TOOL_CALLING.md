@@ -303,7 +303,7 @@ Tool names are converted to valid Python identifiers:
 
 ### Pre-imported Libraries
 
-Match our REPL environment:
+Match our environment:
 
 - `numpy`, `pandas`, `matplotlib`
 - `json`, `re`, `datetime`, `asyncio`

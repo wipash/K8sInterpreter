@@ -59,12 +59,8 @@ class StateArchivalService:
             minio_client: Optional MinIO client (creates new one if not provided)
         """
         self.state_service = state_service or StateService()
-        self.minio_client = minio_client or Minio(
-            settings.minio_endpoint,
-            access_key=settings.minio_access_key,
-            secret_key=settings.minio_secret_key,
-            secure=settings.minio_secure,
-        )
+        # Use the config's create_client method which handles IAM vs static credentials
+        self.minio_client = minio_client or settings.minio.create_client()
         self.bucket_name = settings.minio_bucket
         self._bucket_checked = False
 

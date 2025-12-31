@@ -19,8 +19,8 @@ class LanguageConfig:
 
     code: str  # Short code: "py", "js", "go", etc.
     name: str  # Full name: "Python", "JavaScript", etc.
-    image: str  # Docker image to use
-    user_id: int  # Container user ID
+    image: str  # Container image to use
+    user_id: int  # Pod user ID
     file_extension: str  # File extension without dot: "py", "js", etc.
     execution_command: str  # Command to execute code
     uses_stdin: bool = False  # Whether code is passed via stdin
@@ -62,7 +62,7 @@ LANGUAGES: Dict[str, LanguageConfig] = {
         execution_command="tsc /mnt/data/code.ts --outDir /mnt/data --module commonjs "
         "--target ES2019 && node /mnt/data/code.js",
         uses_stdin=False,
-        timeout_multiplier=1.2,
+        timeout_multiplier=2.0,  # ts-node compilation can be slow on cold start
         memory_multiplier=1.0,
     ),
     "go": LanguageConfig(
@@ -186,19 +186,23 @@ def is_supported_language(code: str) -> bool:
 def get_image_for_language(
     code: str, registry: Optional[str] = None, tag: str = "latest"
 ) -> str:
-    """Get Docker image for a language."""
+    """Get container image for a language.
+
+    Image format: {registry}-{base_image}:{tag}
+    e.g., aronmuon/librecodeinterpreter-python:latest
+    """
     lang = get_language(code)
     if lang:
         # Extract base image name without the default :latest tag
         base_image = lang.image.rsplit(":", 1)[0]
         if registry:
-            return f"{registry}/{base_image}:{tag}"
+            return f"{registry}-{base_image}:{tag}"
         return f"{base_image}:{tag}"
     raise ValueError(f"Unsupported language: {code}")
 
 
 def get_user_id_for_language(code: str) -> int:
-    """Get container user ID for a language."""
+    """Get pod user ID for a language."""
     lang = get_language(code)
     if lang:
         return lang.user_id

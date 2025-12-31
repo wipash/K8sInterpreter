@@ -1,11 +1,17 @@
 """Resource limits configuration."""
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ResourcesConfig(BaseSettings):
     """Resource limits for execution and files."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     # Execution Limits
     max_execution_time: int = Field(default=30, ge=1, le=300)
@@ -47,7 +53,3 @@ class ResourcesConfig(BaseSettings):
     def get_session_ttl_minutes(self) -> int:
         """Get session TTL in minutes."""
         return self.session_ttl_hours * 60
-
-    class Config:
-        env_prefix = ""
-        extra = "ignore"

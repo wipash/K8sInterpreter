@@ -1,0 +1,56 @@
+name: Retag Docker Image (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        required: true
+        type: string
+        description: 'Image name (e.g., librecodeinterpreter-sidecar)'
+      new_tag:
+        required: true
+        type: string
+        description: 'New tag to apply'
+      previous_tag:
+        required: true
+        type: string
+        description: 'Previous tag to copy from'
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+
+jobs:
+  retag:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Retag image
+        run: |
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}"
+          OLD_TAG="${{ inputs.previous_tag }}"
+          NEW_TAG="${{ inputs.new_tag }}"
+
+          echo "Retagging ${IMAGE}:${OLD_TAG} -> ${IMAGE}:${NEW_TAG}"
+
+          # Use imagetools to create new tags pointing to the same digests
+          # This works directly with multi-arch manifests
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${NEW_TAG}" \
+            "${IMAGE}:${OLD_TAG}"
+
+          # Also create platform-specific tags for consistency
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${NEW_TAG}-linux-amd64" \
+            "${IMAGE}:${OLD_TAG}-linux-amd64"
+
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${NEW_TAG}-linux-arm64" \
+            "${IMAGE}:${OLD_TAG}-linux-arm64"
+
+          echo "Successfully retagged ${IMAGE}:${OLD_TAG} as ${IMAGE}:${NEW_TAG}"

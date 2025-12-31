@@ -93,14 +93,6 @@ WORKDIR /mnt/data
 # Ensure ownership of working directory
 RUN chown -R codeuser:codeuser /mnt/data
 
-# Add REPL server and entrypoint scripts
-COPY repl_server.py /opt/repl_server.py
-COPY entrypoint.sh /opt/entrypoint.sh
-RUN chmod +x /opt/repl_server.py /opt/entrypoint.sh
-
-# Ensure /opt is accessible
-RUN chown -R codeuser:codeuser /opt
-
 # Switch to non-root user
 USER codeuser
 
@@ -109,8 +101,5 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/mnt/data
 
-# Use the entrypoint script which handles REPL mode
-# REPL_MODE=true -> runs repl_server.py
-# REPL_MODE unset/false -> runs default command
-ENTRYPOINT ["/opt/entrypoint.sh"]
-CMD ["tail", "-f", "/dev/null"]
+# Main container runs sleep infinity, sidecar uses nsenter to execute code
+CMD ["sleep", "infinity"]

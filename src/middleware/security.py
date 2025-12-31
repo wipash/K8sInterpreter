@@ -25,6 +25,7 @@ class SecurityMiddleware:
         self.max_request_size = settings.max_file_size_mb * 1024 * 1024
         self.excluded_paths = {
             "/health",
+            "/ready",
             "/docs",
             "/redoc",
             "/openapi.json",

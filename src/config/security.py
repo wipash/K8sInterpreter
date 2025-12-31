@@ -1,12 +1,18 @@
 """Security configuration."""
 
 from typing import List
-from pydantic import Field, validator
-from pydantic_settings import BaseSettings
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class SecurityConfig(BaseSettings):
     """Security and authentication settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     # API Key Authentication
     api_key: str = Field(default="test-api-key", min_length=16)
@@ -104,7 +110,8 @@ class SecurityConfig(BaseSettings):
     # Logging
     enable_security_logs: bool = Field(default=True)
 
-    @validator("api_keys", pre=True)
+    @field_validator("api_keys", mode="before")
+    @classmethod
     def parse_api_keys(cls, v):
         """Keep as string, will be parsed when needed."""
         return v
@@ -117,7 +124,3 @@ class SecurityConfig(BaseSettings):
                 [key.strip() for key in self.api_keys.split(",") if key.strip()]
             )
         return list(set(keys))
-
-    class Config:
-        env_prefix = ""
-        extra = "ignore"

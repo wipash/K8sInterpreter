@@ -1,6 +1,6 @@
 """Code execution services.
 
-This package provides code execution functionality split into:
+This package provides code execution functionality using Kubernetes pods:
 - runner.py: Core execution logic
 - output.py: Output processing and validation
 """
@@ -12,14 +12,14 @@ from .output import OutputProcessor
 # that implements the ExecutionServiceInterface
 from ..interfaces import ExecutionServiceInterface
 from .runner import CodeExecutionRunner as _Runner
-from ..container import ContainerManager
+from ..kubernetes import KubernetesManager
 
 
 class CodeExecutionService(_Runner, ExecutionServiceInterface):
-    """Service for executing code in Docker containers.
+    """Service for executing code in Kubernetes pods.
 
     This class provides backward compatibility with the original
-    CodeExecutionService API while using the refactored implementation.
+    CodeExecutionService API while using the Kubernetes implementation.
     """
 
     async def execute_code(
@@ -35,8 +35,8 @@ class CodeExecutionService(_Runner, ExecutionServiceInterface):
             capture_state: Whether to capture state after execution (Python only)
 
         Returns:
-            Tuple of (CodeExecution, Container, new_state, state_errors)
-            Container returned directly for thread-safe file retrieval in concurrent requests.
+            Tuple of (CodeExecution, PodHandle, new_state, state_errors, container_source)
+            PodHandle returned directly for thread-safe file retrieval in concurrent requests.
             new_state is base64-encoded cloudpickle, or None if not captured.
         """
         return await self.execute(
@@ -69,17 +69,10 @@ class CodeExecutionService(_Runner, ExecutionServiceInterface):
         """Backward compatibility alias."""
         return OutputProcessor.format_error_message(exit_code, stderr)
 
-    def __del__(self):
-        """Cleanup when service is destroyed."""
-        try:
-            self.container_manager.close()
-        except Exception:
-            pass
-
 
 __all__ = [
     "CodeExecutionService",
     "CodeExecutionRunner",
     "OutputProcessor",
-    "ContainerManager",
+    "KubernetesManager",
 ]

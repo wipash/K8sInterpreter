@@ -7,9 +7,10 @@ This document provides detailed instructions for setting up the development envi
 ### Prerequisites
 
 - Python 3.11+
-- Docker Engine
+- Kubernetes cluster (1.24+) or Docker for local development
 - Redis
 - MinIO (or S3-compatible storage)
+- Helm 3.x (for Kubernetes deployment)
 
 ### Installation Steps
 
@@ -68,9 +69,9 @@ pytest tests/integration/
 pytest --cov=src tests/
 ```
 
-## Building Docker Images
+## Building Container Images
 
-The API requires language-specific execution images.
+The API requires language-specific execution images and the HTTP sidecar image.
 
 ```bash
 # Build all language execution images
@@ -78,6 +79,9 @@ cd docker && ./build-images.sh -p && cd ..
 
 # Build a single language image (e.g., Python)
 cd docker && ./build-images.sh -l python && cd ..
+
+# Build the HTTP sidecar image
+cd docker/sidecar && docker build -t librecodeinterpreter/sidecar:latest . && cd ../..
 ```
 
-For more details on container management, see [ARCHITECTURE.md](ARCHITECTURE.md).
+For more details on Kubernetes pod management, see [ARCHITECTURE.md](ARCHITECTURE.md).

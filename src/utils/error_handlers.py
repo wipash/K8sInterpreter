@@ -223,36 +223,53 @@ def create_service_error(service_name: str, original_error: Exception = None):
     return ServiceUnavailableError(service=service_name, message=message)
 
 
-def handle_docker_error(error: Exception, operation: str = "container operation"):
-    """Convert Docker errors to appropriate CodeInterpreter exceptions."""
-    from docker.errors import DockerException, APIError, ContainerError, ImageNotFound
+def handle_kubernetes_error(error: Exception, operation: str = "pod operation"):
+    """Convert Kubernetes errors to appropriate CodeInterpreter exceptions."""
     from ..models.errors import (
         ExecutionError,
         ResourceNotFoundError,
         ServiceUnavailableError,
     )
 
-    if isinstance(error, ImageNotFound):
-        return ResourceNotFoundError(resource="Docker image", resource_id=str(error))
-    elif isinstance(error, ContainerError):
-        return ExecutionError(message=f"Container execution failed: {str(error)}")
-    elif isinstance(error, APIError):
-        if error.status_code == 409:
+    error_str = str(error)
+    error_type = type(error).__name__
+
+    # Handle kubernetes client API exceptions
+    if hasattr(error, "status"):
+        status = getattr(error, "status", 500)
+        if status == 404:
+            return ResourceNotFoundError(
+                resource="Kubernetes resource", resource_id=error_str
+            )
+        elif status == 409:
             from ..models.errors import ResourceConflictError
 
             return ResourceConflictError(
-                message=f"Docker API conflict: {error.explanation}"
+                message=f"Kubernetes API conflict: {error_str}"
             )
-        else:
+        elif status == 403:
             return ServiceUnavailableError(
-                service="Docker", message=f"Docker API error: {error.explanation}"
+                service="Kubernetes",
+                message=f"Kubernetes API forbidden (check RBAC): {error_str}",
             )
-    elif isinstance(error, DockerException):
-        return ServiceUnavailableError(
-            service="Docker", message=f"Docker service error: {str(error)}"
-        )
-    else:
-        return ServiceUnavailableError(
-            service="Docker",
-            message=f"Unknown Docker error during {operation}: {str(error)}",
-        )
+        elif status >= 500:
+            return ServiceUnavailableError(
+                service="Kubernetes",
+                message=f"Kubernetes API server error: {error_str}",
+            )
+
+    # Handle timeout errors
+    if "timeout" in error_str.lower() or "timed out" in error_str.lower():
+        from ..models.errors import TimeoutError
+
+        return TimeoutError(message=f"Kubernetes operation timed out: {error_str}")
+
+    # Handle pod execution errors
+    if "execution" in error_str.lower() or "failed" in error_str.lower():
+        return ExecutionError(message=f"Pod execution failed: {error_str}")
+
+    # Default to service unavailable
+    return ServiceUnavailableError(
+        service="Kubernetes",
+        message=f"Kubernetes error during {operation}: {error_str}",
+    )

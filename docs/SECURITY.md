@@ -102,70 +102,59 @@ Code is analyzed for potentially dangerous patterns:
 - **File operations**: `open()`, `file()`, etc.
 - **Input functions**: `input()`, `raw_input()`, etc.
 
-**Note**: Dangerous patterns generate warnings but don't block execution, as the code runs in isolated containers.
+**Note**: Dangerous patterns generate warnings but don't block execution, as the code runs in isolated Kubernetes pods.
 
-#### Container Isolation
+#### Pod Isolation
 
-- **Docker containers**: All code runs in isolated Docker containers
-- **Resource limits**: Memory and CPU limits are enforced
-- **Network isolation**: External network access is blocked by default
-- **Filesystem isolation**: Limited filesystem access within containers
+- **Kubernetes pods**: All code runs in isolated Kubernetes pods
+- **Resource limits**: Memory and CPU limits enforced via Kubernetes
+- **Network isolation**: NetworkPolicy denies all egress by default
+- **Security context**: Pods run as non-root (`runAsUser: 1000`)
+- **Ephemeral execution**: Pods destroyed immediately after execution
 
-#### Container Hardening (Host Info Protection)
+#### Pod Hardening (Host Info Protection)
 
-Containers are hardened to prevent information leakage about the host infrastructure.
+Execution pods are hardened to prevent information leakage about the host infrastructure.
 This prevents reconnaissance attacks that could reveal details about your cloud provider,
-kernel version, or internal network configuration.
+Kubernetes cluster, or internal network configuration.
 
 **Currently Implemented**:
 
 | Feature | Protection |
 |---------|------------|
-| Generic hostname | All containers use hostname "sandbox" instead of revealing host info |
-| Empty DNS search domain | WAN containers have empty search domain to prevent Azure/cloud domain leakage |
-| Public DNS only | WAN containers use only public DNS (8.8.8.8, 1.1.1.1) |
-
-**Configuration**:
-
-```bash
-# Enable/disable host info masking (default: true)
-CONTAINER_MASK_HOST_INFO=true
-
-# Custom generic hostname (default: sandbox)
-CONTAINER_GENERIC_HOSTNAME=sandbox
-```
+| Generic hostname | All pods use hostname "sandbox" instead of revealing node info |
+| Non-root execution | Pods run as `runAsUser: 1000` with `runAsNonRoot: true` |
+| Network policies | Egress denied by default, blocks cloud metadata endpoints |
+| Public DNS only | Execution pods use only public DNS (8.8.8.8, 1.1.1.1) |
 
 **Note**: Kernel version (`/proc/version`) and CPU/memory info (`/proc/cpuinfo`, `/proc/meminfo`)
-remain accessible because many libraries depend on them. The hostname and DNS hardening above
-addresses the primary concern of revealing cloud provider and internal network details.
+remain accessible because many libraries depend on them. The pod security context and network
+policies address the primary concern of revealing cloud provider and internal network details.
 
 ### WAN-Only Network Access
 
 The Code Interpreter API supports an optional WAN-only network mode that allows
-execution containers to access the public internet while maintaining strict
+execution pods to access the public internet while maintaining strict
 isolation from internal networks.
 
 #### Overview
 
-When enabled via `ENABLE_WAN_ACCESS=true`, execution containers are connected
-to a special Docker network that:
+When enabled via `ENABLE_WAN_ACCESS=true`, execution pods are configured with
+a Kubernetes NetworkPolicy that:
 
 1. **Allows**: Outbound connections to public internet IPs (all ports)
-2. **Blocks**: Access to private IP ranges, Docker host, and other containers
+2. **Blocks**: Access to private IP ranges and other pods in the cluster
 
 #### Blocked IP Ranges
 
-The following ranges are blocked via iptables rules:
+The following ranges are blocked via NetworkPolicy:
 
 | Range | Description |
 |-------|-------------|
-| `10.0.0.0/8` | Class A private network |
-| `172.16.0.0/12` | Class B private network (includes Docker networks) |
+| `10.0.0.0/8` | Class A private network (includes most K8s pod CIDRs) |
+| `172.16.0.0/12` | Class B private network |
 | `192.168.0.0/16` | Class C private network |
 | `169.254.0.0/16` | Link-local (includes cloud metadata services) |
-| `127.0.0.0/8` | Loopback |
-| `224.0.0.0/4` | Multicast |
-| `240.0.0.0/4` | Reserved |
 
 #### Configuration
 
@@ -173,32 +162,26 @@ The following ranges are blocked via iptables rules:
 # Enable WAN access (default: false)
 ENABLE_WAN_ACCESS=true
 
-# Custom network name (optional)
-WAN_NETWORK_NAME=code-interpreter-wan
-
 # Custom DNS servers (optional, defaults to Google and Cloudflare DNS)
 WAN_DNS_SERVERS=8.8.8.8,1.1.1.1,8.8.4.4
 ```
 
 #### Security Considerations
 
-1. **iptables Required**: The API container needs `NET_ADMIN` capability to
-   manage iptables rules. This is automatically configured in docker-compose.yml.
+1. **NetworkPolicy Required**: Your Kubernetes cluster must have a CNI that
+   supports NetworkPolicy (Calico, Cilium, etc.).
 
 2. **Public DNS Only**: Only public DNS servers are used to prevent DNS-based
    attacks that could leak internal network information.
 
-3. **No Inter-Container Communication**: The WAN network has ICC (inter-container
-   communication) disabled. Containers cannot communicate with each other.
+3. **No Inter-Pod Communication**: NetworkPolicy denies all ingress and limits
+   egress to public IPs only.
 
 4. **Cloud Metadata Blocked**: The link-local range (169.254.0.0/16) is blocked,
    which includes cloud metadata endpoints (169.254.169.254) used by AWS, GCP,
    and Azure.
 
-5. **IPv4 Only**: The current implementation focuses on IPv4. IPv6 would require
-   separate ip6tables rules.
-
-6. **Default Off**: WAN access is disabled by default for maximum security.
+5. **Default Off**: WAN access is disabled by default for maximum security.
 
 #### When to Enable WAN Access
 
@@ -214,9 +197,9 @@ Keep WAN access disabled (default) when:
 
 #### Audit Logging
 
-WAN-enabled containers are tracked via labels:
-- `com.code-interpreter.wan-access=true` on each container
-- Network initialization and iptables rule application are logged at startup
+WAN-enabled pods are tracked via labels:
+- `librecodeinterpreter.io/wan-access=true` on each pod
+- NetworkPolicy application is logged at pod creation
 
 ### State Persistence Security
 
@@ -224,8 +207,8 @@ Python state persistence introduces additional security considerations:
 
 #### Serialization Security
 
-- **Serialization inside containers**: State is serialized within the isolated container, not on the host. The host never unpickles user data.
-- **cloudpickle usage**: We use cloudpickle for serialization. While pickle-based formats can execute code during deserialization, this only occurs inside the sandboxed container.
+- **Serialization inside pods**: State is serialized within the isolated execution pod, not on the API server. The API never unpickles user data.
+- **cloudpickle usage**: We use cloudpickle for serialization. While pickle-based formats can execute code during deserialization, this only occurs inside the sandboxed pod.
 - **Compression**: State is compressed with lz4 before storage, providing minor obfuscation and reducing attack surface.
 - **Base64 encoding**: Final storage uses base64 encoding for safe transport.
 
@@ -339,7 +322,7 @@ If dangerous code patterns are detected:
 1. Review the code content in logs
 2. Check the session and user context
 3. Consider additional code validation rules
-4. Monitor container resource usage
+4. Monitor pod resource usage via Kubernetes metrics
 
 ### File Upload Issues
 

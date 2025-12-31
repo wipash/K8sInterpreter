@@ -40,7 +40,6 @@ State persistence uses a hybrid storage architecture:
    POST /exec {"lang": "py", "code": "x = 42"}
 
    → Container executes code
-   → REPL server captures namespace: {"x": 42}
    → Namespace serialized with cloudpickle
    → Compressed with lz4 (~10x reduction)
    → Stored in Redis with 2-hour TTL
@@ -54,7 +53,6 @@ State persistence uses a hybrid storage architecture:
 
    → StateService loads state from Redis
    → If not in Redis, checks MinIO archives
-   → State deserialized into REPL namespace
    → Code executes with existing variables
    → Updated state saved back to Redis
    ```
@@ -291,26 +289,6 @@ pd = pandas  # Now pd is in namespace
 ```
 
 ---
-
-## Technical Details
-
-### REPL Server Implementation
-
-The REPL server (`docker/repl_server.py`) handles serialization:
-
-```python
-# After code execution
-namespace = {k: v for k, v in globals().items()
-             if not k.startswith('_') and k not in BUILTIN_NAMES}
-
-# Serialize
-state_bytes = cloudpickle.dumps(namespace)
-compressed = lz4.frame.compress(state_bytes)
-encoded = base64.b64encode(compressed).decode('utf-8')
-
-# Return in response
-{"stdout": "...", "state": encoded}
-```
 
 ### State Size Limits
 
@@ -593,5 +571,4 @@ curl -sk -X POST https://localhost/exec \
 
 - [CONFIGURATION.md](CONFIGURATION.md) - All configuration options
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture overview
-- [REPL.md](REPL.md) - REPL server details
 - [PERFORMANCE.md](PERFORMANCE.md) - Performance tuning

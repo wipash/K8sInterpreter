@@ -132,74 +132,53 @@ async def lifespan(app: FastAPI):
         logger.error("Failed to start cleanup scheduler", error=str(e))
         # Don't fail startup if cleanup scheduler fails
 
-    # Initialize WAN network for container internet access if enabled
-    # IMPORTANT: This must happen BEFORE the container pool starts
-    if settings.enable_wan_access:
+    # Start Kubernetes pod pool if enabled
+    kubernetes_manager = None
+    if settings.pod_pool_enabled:
         try:
-            logger.info("Initializing WAN network for container internet access...")
-            from .services.container.network import WANNetworkManager
-            from .services.container.manager import ContainerManager
-
-            temp_manager = ContainerManager()
-            if temp_manager.is_available():
-                wan_network_manager = WANNetworkManager(temp_manager.client)
-                if await wan_network_manager.initialize():
-                    app.state.wan_network_manager = wan_network_manager
-                    logger.info(
-                        "WAN network initialized successfully",
-                        network_name=settings.wan_network_name,
-                        dns_servers=settings.wan_dns_servers,
-                    )
-                else:
-                    logger.error("Failed to initialize WAN network")
-            else:
-                logger.warning("Docker not available, skipping WAN network setup")
-        except Exception as e:
-            logger.error("Error initializing WAN network", error=str(e))
-            # Don't fail startup if WAN network fails
-    else:
-        logger.info("WAN network access disabled (containers have no network access)")
-
-    # Start container pool if enabled
-    container_pool = None
-    if settings.container_pool_enabled:
-        try:
-            logger.info("Starting container pool...")
-            from .services.container.pool import ContainerPool
-            from .services.container.manager import ContainerManager
-            from .services.cleanup import cleanup_scheduler
+            logger.info("Starting Kubernetes pod pool...")
+            from .services.kubernetes import KubernetesManager
+            from .services.kubernetes.models import PoolConfig
             from .dependencies.services import (
-                set_container_pool,
-                inject_container_pool_to_execution_service,
+                set_kubernetes_manager,
+                inject_kubernetes_manager_to_execution_service,
             )
 
-            container_manager = ContainerManager()
-            container_pool = ContainerPool(container_manager)
-            await container_pool.start()
+            # Build pool configs from settings
+            pool_configs = settings.get_pool_configs()
 
-            # Connect pool to cleanup scheduler
-            cleanup_scheduler.set_container_pool(container_pool)
+            kubernetes_manager = KubernetesManager(
+                namespace=settings.k8s_namespace or None,
+                pool_configs=pool_configs,
+                sidecar_image=settings.k8s_sidecar_image,
+                default_cpu_limit=settings.k8s_cpu_limit,
+                default_memory_limit=settings.k8s_memory_limit,
+                default_cpu_request=settings.k8s_cpu_request,
+                default_memory_request=settings.k8s_memory_request,
+            )
 
-            # Register pool with dependency injection system
-            set_container_pool(container_pool)
-            inject_container_pool_to_execution_service()
+            await kubernetes_manager.start()
 
-            # Register pool with health service for monitoring
-            health_service.set_container_pool(container_pool)
+            # Register manager with dependency injection system
+            set_kubernetes_manager(kubernetes_manager)
+            inject_kubernetes_manager_to_execution_service()
 
-            # Store pool reference in app state
-            app.state.container_pool = container_pool
+            # Register manager with health service for monitoring
+            health_service.set_kubernetes_manager(kubernetes_manager)
+
+            # Store manager reference in app state
+            app.state.kubernetes_manager = kubernetes_manager
 
             logger.info(
-                "Container pool started successfully",
-                warmup_languages=["py", "js", "ts", "go", "java"],
+                "Kubernetes pod pool started successfully",
+                pool_stats=kubernetes_manager.get_pool_stats(),
             )
         except Exception as e:
-            logger.error("Failed to start container pool", error=str(e))
-            # Don't fail startup if container pool fails
-            container_pool = None
+            logger.error("Failed to start Kubernetes pod pool", error=str(e))
+            # Don't fail startup if pod pool fails
+            kubernetes_manager = None
     else:
-        logger.info("Container pool disabled by configuration")
+        logger.info("Pod pool disabled by configuration")
 
     # Perform initial health checks
     try:
@@ -236,14 +215,6 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Code Interpreter API")
 
-    # Cleanup WAN network iptables rules
-    if hasattr(app.state, "wan_network_manager") and app.state.wan_network_manager:
-        try:
-            await app.state.wan_network_manager.cleanup()
-            logger.info("WAN network iptables rules cleaned up")
-        except Exception as e:
-            logger.error("Error cleaning up WAN network", error=str(e))
-
     # Stop SQLite metrics service (flush pending writes)
     if (
         hasattr(app.state, "sqlite_metrics_service")
@@ -255,13 +226,13 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error("Error stopping SQLite metrics service", error=str(e))
 
-    # Stop container pool first (it manages active containers)
-    if hasattr(app.state, "container_pool") and app.state.container_pool:
+    # Stop Kubernetes pod pool
+    if hasattr(app.state, "kubernetes_manager") and app.state.kubernetes_manager:
         try:
-            await app.state.container_pool.stop()
-            logger.info("Container pool stopped")
+            await app.state.kubernetes_manager.stop()
+            logger.info("Kubernetes pod pool stopped")
         except Exception as e:
-            logger.error("Error stopping container pool", error=str(e))
+            logger.error("Error stopping Kubernetes pod pool", error=str(e))
 
     # Stop cleanup scheduler
     try:
@@ -284,7 +255,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app with enhanced configuration
 app = FastAPI(
     title="Code Interpreter API",
-    description="A secure API for executing code in isolated environments",
+    description="A secure API for executing code in isolated Kubernetes pods",
     version="1.0.0",
     docs_url="/docs" if settings.enable_docs else None,
     redoc_url="/redoc" if settings.enable_docs else None,
@@ -322,7 +293,7 @@ app.add_exception_handler(Exception, general_exception_handler)
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint for liveness probe."""
     return {
         "status": "healthy",
         "version": "1.0.0",
@@ -332,6 +303,12 @@ async def health_check():
             "cors_enabled": settings.enable_cors,
         },
     }
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Readiness check endpoint for readiness probe."""
+    return {"status": "ready"}
 
 
 @app.get("/config")

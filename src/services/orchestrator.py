@@ -466,9 +466,9 @@ class ExecutionOrchestrator:
             "Code execution completed",
             session_id=ctx.session_id,
             status=execution.status.value,
-            container_id=(
-                ctx.container.id[:12]
-                if ctx.container and hasattr(ctx.container, "id")
+            pod_name=(
+                ctx.container.name
+                if ctx.container and hasattr(ctx.container, "name")
                 else None
             ),
             has_state=ctx.new_state is not None,
@@ -517,35 +517,25 @@ class ExecutionOrchestrator:
         return generated
 
     async def _get_file_from_container(self, container: Any, file_path: str) -> bytes:
-        """Get file content from the execution container.
+        """Get file content from the execution pod via sidecar HTTP API.
 
         Args:
-            container: Docker container object (passed directly, no session lookup needed)
-            file_path: Path to file inside container
+            container: PodHandle object (passed directly, no session lookup needed)
+            file_path: Path to file inside pod (e.g., /mnt/data/output.png)
         """
-        import tempfile
-        import os
-
         if not container:
-            return f"# Container not found for file: {file_path}\n".encode("utf-8")
+            return f"# Pod not found for file: {file_path}\n".encode("utf-8")
 
-        container_manager = self.execution_service.container_manager
+        # Extract filename from path
+        filename = file_path.split("/")[-1] if "/" in file_path else file_path
 
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-            temp_path = tmp_file.name
+        kubernetes_manager = self.execution_service.kubernetes_manager
+        content = await kubernetes_manager.copy_file_from_pod(container, filename)
 
-        try:
-            success = await container_manager.copy_from_container(
-                container, file_path, temp_path
-            )
-            if success:
-                with open(temp_path, "rb") as f:
-                    return f.read()
-            else:
-                return f"# Failed to retrieve file: {file_path}\n".encode("utf-8")
-        finally:
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
+        if content:
+            return content
+        else:
+            return f"# Failed to retrieve file: {file_path}\n".encode("utf-8")
 
     def _extract_outputs(self, ctx: ExecutionContext) -> None:
         """Extract stdout and stderr from execution outputs."""
@@ -604,37 +594,35 @@ class ExecutionOrchestrator:
     async def _cleanup(self, ctx: ExecutionContext) -> None:
         """Cleanup resources after execution.
 
-        - Destroys the container in background (non-blocking for faster response)
+        - Destroys the pod in background (non-blocking for faster response)
         - Publishes ExecutionCompleted event for metrics
         """
-        # Destroy container in background for faster response
+        # Destroy pod in background for faster response
         if ctx.container:
             try:
-                container_manager = self.execution_service.container_manager
-                container_id = (
-                    ctx.container.id[:12] if hasattr(ctx.container, "id") else "unknown"
+                kubernetes_manager = self.execution_service.kubernetes_manager
+                pod_name = (
+                    ctx.container.name if hasattr(ctx.container, "name") else "unknown"
                 )
-                logger.debug(
-                    "Scheduling container destruction", container_id=container_id
-                )
+                logger.debug("Scheduling pod destruction", pod_name=pod_name)
 
-                # Fire-and-forget: destroy container in background
+                # Fire-and-forget: destroy pod in background
                 async def destroy_background():
                     try:
-                        await container_manager.force_kill_container(ctx.container)
-                        logger.debug("Container destroyed", container_id=container_id)
+                        await kubernetes_manager.destroy_pod(ctx.container)
+                        logger.debug("Pod destroyed", pod_name=pod_name)
                     except Exception as e:
                         logger.warning(
-                            "Background container destruction failed",
-                            container_id=container_id,
+                            "Background pod destruction failed",
+                            pod_name=pod_name,
                             error=str(e),
                         )
 
                 asyncio.create_task(destroy_background())
             except Exception as e:
-                logger.error("Failed to schedule container destruction", error=str(e))
+                logger.error("Failed to schedule pod destruction", error=str(e))
         else:
-            logger.debug("No container in context to destroy")
+            logger.debug("No pod in context to destroy")
 
         # Publish event for metrics
         try:
@@ -700,13 +688,6 @@ class ExecutionOrchestrator:
             # Get state size if available
             state_size = len(ctx.new_state.encode()) if ctx.new_state else None
 
-            # Check if REPL mode was used
-            repl_mode = (
-                ctx.request.lang == "py"
-                and settings.repl_enabled
-                and settings.container_pool_enabled
-            )
-
             metrics = DetailedExecutionMetrics(
                 execution_id=(
                     ctx.execution.execution_id if ctx.execution else ctx.request_id
@@ -720,7 +701,6 @@ class ExecutionOrchestrator:
                 execution_time_ms=execution_time_ms or 0,
                 memory_peak_mb=memory_peak_mb,
                 container_source=ctx.container_source,
-                repl_mode=repl_mode,
                 files_uploaded=files_uploaded,
                 files_generated=files_generated,
                 output_size_bytes=output_size,

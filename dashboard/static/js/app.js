@@ -949,11 +949,11 @@ function getHealthIcon(service) {
   switch (service.toLowerCase()) {
     case "redis":
       return "database";
-    case "docker":
+    case "kubernetes":
       return "box";
     case "minio":
       return "hard-drive";
-    case "container_pool":
+    case "pod_pool":
       return "layers";
     default:
       return "activity";

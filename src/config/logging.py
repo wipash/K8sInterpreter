@@ -1,11 +1,17 @@
 """Logging configuration."""
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class LoggingConfig(BaseSettings):
     """Logging settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     level: str = Field(default="INFO", alias="log_level")
     format: str = Field(default="json", alias="log_format")
@@ -17,7 +23,3 @@ class LoggingConfig(BaseSettings):
     # Health Check
     health_check_interval: int = Field(default=30, ge=10)
     health_check_timeout: int = Field(default=5, ge=1)
-
-    class Config:
-        env_prefix = ""
-        extra = "ignore"
