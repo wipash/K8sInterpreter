@@ -3,7 +3,7 @@ FROM python:3.11-slim as builder
 
 # Set build arguments
 ARG BUILD_DATE
-ARG VERSION=1.0.0
+ARG VERSION=1.1.1
 ARG VCS_REF
 
 # Add metadata
