@@ -13,7 +13,7 @@ help:
 	@echo "  lint             Run ruff linter"
 	@echo "  format           Format code with ruff"
 	@echo "  format-check     Check code formatting without changes"
-	@echo "  typecheck        Run mypy type checking"
+	@echo "  typecheck        Run ty type checking"
 	@echo "  clean            Remove build artifacts and cache"
 	@echo "  run              Run the development server"
 	@echo "  docker-up        Start docker-compose services"
@@ -59,15 +59,15 @@ format:
 format-check:
 	uv run ruff format --check src/ tests/
 
-# Type checking with mypy
+# Type checking with ty
 typecheck:
-	uv run mypy src/
+	uv run ty check src/
 
 # Clean build artifacts
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name ".ty_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name "htmlcov" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	find . -type f -name ".coverage" -delete 2>/dev/null || true

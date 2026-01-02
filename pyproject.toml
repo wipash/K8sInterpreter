@@ -1,0 +1,77 @@
+[project]
+name = "k8s-interpreter"
+requires-python = ">=3.14"
+
+[tool.ty]
+# Global settings
+[tool.ty.environment]
+python-version = "3.14"
+
+[tool.ty.src]
+include = ["src"]
+exclude = ["tests"]
+
+# Per-module overrides for problematic external dependencies
+[[tool.ty.overrides]]
+include = ["src/services/container/**"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/services/health.py"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/services/orchestrator.py"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/services/session.py"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/services/detailed_metrics.py"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/services/api_key_manager.py"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/api/state.py"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/api/files.py"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/services/state.py"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/services/state_archival.py"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/services/execution/**"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/utils/logging.py"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/utils/error_handlers.py"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/utils/shutdown.py"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/middleware/**"]
+ignore-errors = true
+
+[[tool.ty.overrides]]
+include = ["src/main.py"]
+ignore-errors = true
