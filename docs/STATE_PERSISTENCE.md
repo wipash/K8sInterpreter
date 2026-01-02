@@ -19,7 +19,7 @@ State persistence uses a hybrid storage architecture:
 │                         Hybrid State Storage                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│   Hot Storage (Redis)                  Cold Storage (MinIO)                 │
+│   Hot Storage (Redis)                  Cold Storage (S3 storage)                 │
 │   ┌─────────────────────┐              ┌─────────────────────┐             │
 │   │ TTL: 2 hours        │    Archive   │ TTL: 7 days         │             │
 │   │ Access: ~1ms        │ ──────────▶  │ Access: ~50ms       │             │
@@ -52,7 +52,7 @@ State persistence uses a hybrid storage architecture:
    POST /exec {"lang": "py", "code": "print(x)", "session_id": "abc123"}
 
    → StateService loads state from Redis
-   → If not in Redis, checks MinIO archives
+   → If not in Redis, checks S3 storage archives
    → Code executes with existing variables
    → Updated state saved back to Redis
    ```
@@ -89,7 +89,7 @@ CleanupService (every 5 min)
             │
             └── If inactive > 1 hour:
                     │
-                    ├── Upload to MinIO (state-archive/{session_id})
+                    ├── Upload to S3 storage (state-archive/{session_id})
                     │
                     └── Keep in Redis (will expire at 2 hours)
 ```
@@ -97,7 +97,7 @@ CleanupService (every 5 min)
 When a session resumes after Redis expiry:
 
 1. StateService checks Redis → not found
-2. StateArchivalService checks MinIO → found
+2. StateArchivalService checks S3 storage → found
 3. State restored to Redis for fast future access
 
 ---
@@ -117,7 +117,7 @@ When a session resumes after Redis expiry:
 
 | Variable                               | Default | Description                            |
 | -------------------------------------- | ------- | -------------------------------------- |
-| `STATE_ARCHIVE_ENABLED`                | `true`  | Enable MinIO archival                  |
+| `STATE_ARCHIVE_ENABLED`                | `true`  | Enable S3 storage archival                  |
 | `STATE_ARCHIVE_AFTER_SECONDS`          | `3600`  | Archive after this inactivity (1 hour) |
 | `STATE_ARCHIVE_TTL_DAYS`               | `7`     | Keep archives for this many days       |
 | `STATE_ARCHIVE_CHECK_INTERVAL_SECONDS` | `300`   | Check frequency (5 minutes)            |
@@ -133,7 +133,7 @@ STATE_PERSISTENCE_ENABLED=false
 When disabled:
 
 - Each Python execution starts with a clean namespace
-- No state is saved to Redis or MinIO
+- No state is saved to Redis or S3 storage
 - `session_id` in requests is ignored for state (still used for files)
 
 ---
@@ -318,7 +318,7 @@ If state exceeds this limit:
 | Storage | Key Pattern                  | Content                     |
 | ------- | ---------------------------- | --------------------------- |
 | Redis   | `state:{session_id}`         | Compressed state + metadata |
-| MinIO   | `state-archive/{session_id}` | Compressed state (archived) |
+| S3 storage   | `state-archive/{session_id}` | Compressed state (archived) |
 
 ---
 
@@ -394,7 +394,7 @@ curl -X GET https://localhost/health/redis \
 
 ### Archive Not Working
 
-1. **Check MinIO connectivity:**
+1. **Check S3 storage connectivity:**
 
    ```bash
    curl -X GET https://localhost/health/minio \
@@ -414,7 +414,7 @@ curl -X GET https://localhost/health/redis \
 Clients can download, cache, and restore state independently. This enables:
 
 - **Longer state retention**: Cache state client-side beyond 2-hour Redis TTL
-- **Reduced server load**: Restore from client cache instead of MinIO archive
+- **Reduced server load**: Restore from client cache instead of S3 storage archive
 - **Offline resilience**: Resume sessions even if server state is lost
 
 ### API Endpoints

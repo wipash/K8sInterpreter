@@ -151,18 +151,20 @@ Redis is used for session management and caching.
 REDIS_URL=redis://password@localhost:6379/0
 ```
 
-### MinIO/S3 Configuration
+### S3-Compatible Storage Configuration
 
-MinIO provides S3-compatible object storage for files.
+Garage provides lightweight S3-compatible object storage for files. Also supports MinIO and AWS S3.
 
-| Variable           | Default                  | Description                         |
-| ------------------ | ------------------------ | ----------------------------------- |
-| `MINIO_ENDPOINT`   | `localhost:9000`         | MinIO server endpoint (no protocol) |
-| `MINIO_ACCESS_KEY` | `minioadmin`             | MinIO access key                    |
-| `MINIO_SECRET_KEY` | `minioadmin`             | MinIO secret key                    |
-| `MINIO_SECURE`     | `false`                  | Use HTTPS for MinIO connections     |
-| `MINIO_BUCKET`     | `code-interpreter-files` | Bucket name for file storage        |
-| `MINIO_REGION`     | `us-east-1`              | MinIO region                        |
+| Variable           | Default                  | Description                                      |
+| ------------------ | ------------------------ | ------------------------------------------------ |
+| `MINIO_ENDPOINT`   | `localhost:9000`         | S3 server endpoint (no protocol)                 |
+| `MINIO_ACCESS_KEY` | `minioadmin`             | S3 access key                                    |
+| `MINIO_SECRET_KEY` | `minioadmin`             | S3 secret key                                    |
+| `MINIO_SECURE`     | `false`                  | Use HTTPS for S3 connections                     |
+| `MINIO_BUCKET`     | `code-interpreter-files` | Bucket name for file storage                     |
+| `MINIO_REGION`     | `garage`                 | S3 region (use "garage" for Garage deployments)  |
+
+> **Note:** Variable names use the `MINIO_` prefix for compatibility with the Python minio client library.
 
 ### Kubernetes Configuration
 
@@ -251,14 +253,14 @@ Python sessions can persist variables, functions, and objects across executions 
 
 ### State Archival Configuration (Python)
 
-Inactive states are automatically archived to MinIO for long-term storage.
+Inactive states are automatically archived to S3 storage for long-term storage.
 
-| Variable                               | Default | Description                            |
-| -------------------------------------- | ------- | -------------------------------------- |
-| `STATE_ARCHIVE_ENABLED`                | `true`  | Enable MinIO cold storage archival     |
-| `STATE_ARCHIVE_AFTER_SECONDS`          | `3600`  | Archive after this inactivity (1 hour) |
-| `STATE_ARCHIVE_TTL_DAYS`               | `7`     | Keep archives for this many days       |
-| `STATE_ARCHIVE_CHECK_INTERVAL_SECONDS` | `300`   | Archival check frequency (5 min)       |
+| Variable                               | Default | Description                             |
+| -------------------------------------- | ------- | --------------------------------------- |
+| `STATE_ARCHIVE_ENABLED`                | `true`  | Enable S3 cold storage archival         |
+| `STATE_ARCHIVE_AFTER_SECONDS`          | `3600`  | Archive after this inactivity (1 hour)  |
+| `STATE_ARCHIVE_TTL_DAYS`               | `7`     | Keep archives for this many days        |
+| `STATE_ARCHIVE_CHECK_INTERVAL_SECONDS` | `300`   | Archival check frequency (5 min)        |
 
 ### Security Configuration
 
@@ -398,9 +400,9 @@ if validate_configuration():
 ### Infrastructure
 
 - [ ] Secure Redis with authentication
-- [ ] Secure MinIO with proper access keys
+- [ ] Secure S3 storage with proper access keys
 - [ ] Configure Kubernetes RBAC for API service account
-- [ ] Set up backup for Redis and MinIO data
+- [ ] Set up backup for Redis and S3 storage data
 
 ## Troubleshooting
 
@@ -419,8 +421,8 @@ python config_manager.py validate
    - Verify host, port, and credentials
    - Check network connectivity
 
-2. **MinIO Connection Failed**
-   - Verify MinIO server is accessible
+2. **S3 Storage Connection Failed**
+   - Verify S3 server is accessible
    - Check access key and secret key
    - Ensure bucket exists or can be created
 

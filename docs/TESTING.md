@@ -13,7 +13,7 @@ tests/
 │   ├── test_execution_service.py
 │   ├── test_session_service.py
 │   └── ...
-├── integration/             # Integration tests (require Docker, Redis, MinIO)
+├── integration/             # Integration tests (require Docker, Redis, S3 storage)
 │   ├── test_api_contracts.py
 │   ├── test_librechat_compat.py
 │   ├── test_container_behavior.py
@@ -28,7 +28,7 @@ tests/
 
 Unit tests validate individual components in isolation:
 
-- Mock external dependencies (Kubernetes, Redis, MinIO)
+- Mock external dependencies (Kubernetes, Redis, S3 storage)
 - Fast execution (~seconds)
 - No infrastructure required
 
@@ -36,7 +36,7 @@ Unit tests validate individual components in isolation:
 
 Integration tests validate end-to-end behavior:
 
-- Require running Kubernetes (or kind/k3s), Redis, MinIO
+- Require running Kubernetes (or kind/k3s), Redis, S3 storage
 - Test actual API endpoints
 - Validate LibreChat compatibility
 - Test pod behavior and cleanup

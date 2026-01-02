@@ -9,7 +9,7 @@ This document provides detailed instructions for setting up the development envi
 - Python 3.11+
 - Kubernetes cluster (1.24+) or Docker for local development
 - Redis
-- MinIO (or S3-compatible storage)
+- S3 storage (or S3-compatible storage)
 - Helm 3.x (for Kubernetes deployment)
 
 ### Installation Steps
@@ -62,7 +62,7 @@ For detailed testing instructions, please refer to [TESTING.md](TESTING.md).
 # Run unit tests
 pytest tests/unit/
 
-# Run integration tests (requires Docker/Redis/MinIO)
+# Run integration tests (requires Docker/Redis/S3 storage)
 pytest tests/integration/
 
 # Run all tests with coverage

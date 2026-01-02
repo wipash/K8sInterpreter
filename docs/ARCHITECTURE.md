@@ -15,7 +15,7 @@ K8sInterpreter is a secure API for executing code in isolated Kubernetes pods. I
                     ┌───────────────┼───────────────┐
                     ▼               ▼               ▼
             ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-            │   Redis     │  │    MinIO    │  │ Kubernetes  │
+            │   Redis     │  │   Garage    │  │ Kubernetes  │
             │  (Sessions) │  │   (Files)   │  │   (Pods)    │
             └─────────────┘  └─────────────┘  └─────────────┘
                                                     │
@@ -132,7 +132,7 @@ Since `nsenter -m` only enters the mount namespace (not the environment), the si
 | Service | Module | Responsibility |
 |---------|--------|----------------|
 | **SessionService** | `session.py` | Session lifecycle (create, get, delete) |
-| **FileService** | `file.py` | File storage in MinIO |
+| **FileService** | `file.py` | File storage in S3-compatible storage (Garage) |
 | **CodeExecutionService** | `execution/` | Orchestrates code execution |
 | **KubernetesManager** | `kubernetes/` | Pod lifecycle and execution |
 | **StateService** | `state.py` | Python state persistence in Redis |
@@ -202,10 +202,10 @@ Python sessions support state persistence across executions:
 ```
 
 **State Flow:**
-1. Before execution: Load state from Redis (or MinIO archive)
+1. Before execution: Load state from Redis (or S3 archive)
 2. Execute code with state restoration
 3. After execution: Capture and save new state
-4. Archive to MinIO after TTL expires
+4. Archive to S3 storage after TTL expires
 
 ## Configuration
 
@@ -352,4 +352,4 @@ helm install k8sinterpreter ./helm-deployments/k8sinterpreter \
 
 - **Kubernetes 1.24+**: Pod and Job execution
 - **Redis 6+**: Session and state storage
-- **MinIO/S3**: File storage and state archives
+- **S3-Compatible Storage**: File storage and state archives (Garage, MinIO, or AWS S3)
