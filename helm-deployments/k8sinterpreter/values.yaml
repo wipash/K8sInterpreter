@@ -103,6 +103,9 @@ redis:
   db: 0
 
 minio:
+  # S3-compatible storage configuration
+  # Supports Garage, MinIO, AWS S3, or any S3-compatible service
+  # Note: Variable name is "minio" for compatibility with the minio Python client
   endpoint: "minio:9000"
   accessKey: ""
   secretKey: ""
@@ -111,7 +114,8 @@ minio:
   # Use IAM role for authentication (IRSA on EKS)
   # When true, accessKey and secretKey are not required
   useIAM: false
-  # AWS region (required when useIAM is true)
+  # AWS/S3 region (required when useIAM is true, or when using AWS S3)
+  # For Garage, use "garage" or your configured region
   region: ""
 
 # API Configuration
