@@ -1,15 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "librecodeinterpreter.fullname" . }}
+  name: {{ include "k8sinterpreter.fullname" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "librecodeinterpreter.labels" . | nindent 4 }}
+    {{- include "k8sinterpreter.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "librecodeinterpreter.selectorLabels" . | nindent 6 }}
+      {{- include "k8sinterpreter.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
@@ -21,13 +21,13 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "librecodeinterpreter.selectorLabels" . | nindent 8 }}
+        {{- include "k8sinterpreter.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "librecodeinterpreter.serviceAccountName" . }}
+      serviceAccountName: {{ include "k8sinterpreter.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -68,15 +68,15 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           envFrom:
             - configMapRef:
-                name: {{ include "librecodeinterpreter.fullname" . }}-config
+                name: {{ include "k8sinterpreter.fullname" . }}-config
             {{- if .Values.secretsStore.enabled }}
             # Use secrets synced from AWS Secrets Manager via CSI driver
             - secretRef:
-                name: {{ include "librecodeinterpreter.fullname" . }}-aws-secrets
+                name: {{ include "k8sinterpreter.fullname" . }}-aws-secrets
             {{- else }}
             # Use Helm-managed secrets
             - secretRef:
-                name: {{ include "librecodeinterpreter.fullname" . }}-secrets
+                name: {{ include "k8sinterpreter.fullname" . }}-secrets
             {{- end }}
           volumeMounts:
             - name: data
@@ -97,7 +97,7 @@ spec:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: {{ include "librecodeinterpreter.fullname" . }}-secrets
+              secretProviderClass: {{ include "k8sinterpreter.fullname" . }}-secrets
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

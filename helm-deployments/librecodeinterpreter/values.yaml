@@ -1,10 +1,10 @@
-# LibreCodeInterpreter Helm Chart Values
+# K8sInterpreter Helm Chart Values
 
 # API Deployment Configuration
 replicaCount: 1
 
 image:
-  repository: aronmuon/librecodeinterpreter-api
+  repository: aronmuon/k8sinterpreter-api
   pullPolicy: IfNotPresent
   tag: "latest"
 
@@ -39,7 +39,7 @@ ingress:
   className: ""
   annotations: {}
   hosts:
-    - host: librecodeinterpreter.local
+    - host: k8sinterpreter.local
       paths:
         - path: /
           pathType: Prefix
@@ -133,8 +133,8 @@ execution:
 
   # Image registry configuration
   # Images are named: {imageRegistry}-{language}:{imageTag}
-  # e.g., aronmuon/librecodeinterpreter-python:latest
-  imageRegistry: "aronmuon/librecodeinterpreter"
+  # e.g., aronmuon/k8sinterpreter-python:latest
+  imageRegistry: "aronmuon/k8sinterpreter"
   imageTag: "latest"
   # Image pull policy for execution pods (IfNotPresent, Always, Never)
   # Use "Always" when using :latest tags to ensure fresh images
@@ -143,12 +143,12 @@ execution:
   # Service account for execution pods (with pod/job create permissions)
   serviceAccount:
     create: true
-    name: "librecodeinterpreter-executor"
+    name: "k8sinterpreter-executor"
     annotations: {}
 
   # Sidecar container configuration
   sidecar:
-    image: aronmuon/librecodeinterpreter-sidecar:latest
+    image: aronmuon/k8sinterpreter-sidecar:latest
     port: 8080
 
   # Per-language pool configuration
@@ -156,40 +156,40 @@ execution:
   # poolSize = 0: use Jobs (cold start)
   languages:
     python:
-      image: aronmuon/librecodeinterpreter-python:latest
+      image: aronmuon/k8sinterpreter-python:latest
       poolSize: 5
     javascript:
-      image: aronmuon/librecodeinterpreter-javascript:latest
+      image: aronmuon/k8sinterpreter-javascript:latest
       poolSize: 2
     typescript:
-      image: aronmuon/librecodeinterpreter-typescript:latest
+      image: aronmuon/k8sinterpreter-typescript:latest
       poolSize: 0
     go:
-      image: aronmuon/librecodeinterpreter-go:latest
+      image: aronmuon/k8sinterpreter-go:latest
       poolSize: 0
     java:
-      image: aronmuon/librecodeinterpreter-java:latest
+      image: aronmuon/k8sinterpreter-java:latest
       poolSize: 0
     rust:
-      image: aronmuon/librecodeinterpreter-rust:latest
+      image: aronmuon/k8sinterpreter-rust:latest
       poolSize: 0
     c:
-      image: aronmuon/librecodeinterpreter-c-cpp:latest
+      image: aronmuon/k8sinterpreter-c-cpp:latest
       poolSize: 0
     cpp:
-      image: aronmuon/librecodeinterpreter-c-cpp:latest
+      image: aronmuon/k8sinterpreter-c-cpp:latest
       poolSize: 0
     php:
-      image: aronmuon/librecodeinterpreter-php:latest
+      image: aronmuon/k8sinterpreter-php:latest
       poolSize: 0
     r:
-      image: aronmuon/librecodeinterpreter-r:latest
+      image: aronmuon/k8sinterpreter-r:latest
       poolSize: 0
     fortran:
-      image: aronmuon/librecodeinterpreter-fortran:latest
+      image: aronmuon/k8sinterpreter-fortran:latest
       poolSize: 0
     d:
-      image: aronmuon/librecodeinterpreter-d:latest
+      image: aronmuon/k8sinterpreter-d:latest
       poolSize: 0
 
   # Job settings (for languages with poolSize=0)

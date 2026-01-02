@@ -2,10 +2,10 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "librecodeinterpreter.fullname" . }}-cleanup
+  name: {{ include "k8sinterpreter.fullname" . }}-cleanup
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "librecodeinterpreter.labels" . | nindent 4 }}
+    {{- include "k8sinterpreter.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": pre-delete
     "helm.sh/hook-weight": "-5"
@@ -14,7 +14,7 @@ spec:
   ttlSecondsAfterFinished: 60
   template:
     spec:
-      serviceAccountName: {{ include "librecodeinterpreter.serviceAccountName" . }}
+      serviceAccountName: {{ include "k8sinterpreter.serviceAccountName" . }}
       restartPolicy: Never
       containers:
         - name: cleanup
@@ -25,12 +25,12 @@ spec:
             - |
               echo "Cleaning up pool pods..."
               kubectl delete pods -n {{ .Release.Namespace }} \
-                -l app.kubernetes.io/managed-by=librecodeinterpreter \
-                -l librecodeinterpreter.io/type=pool \
+                -l app.kubernetes.io/managed-by=k8sinterpreter \
+                -l k8sinterpreter.io/type=pool \
                 --ignore-not-found=true
               echo "Cleaning up any remaining jobs..."
               kubectl delete jobs -n {{ .Release.Namespace }} \
-                -l app.kubernetes.io/managed-by=librecodeinterpreter \
+                -l app.kubernetes.io/managed-by=k8sinterpreter \
                 --ignore-not-found=true
               echo "Cleanup complete."
 {{- end }}
