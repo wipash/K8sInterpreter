@@ -1,5 +1,5 @@
 # Multi-stage build for Code Interpreter API.
-FROM python:3.11-slim as builder
+FROM python:3.14-slim as builder
 
 # Set build arguments
 ARG BUILD_DATE
@@ -33,7 +33,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Production stage
-FROM python:3.11-slim as production
+FROM python:3.14-slim as production
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -50,7 +50,7 @@ RUN groupadd -r -g 1000 appuser && useradd -r -u 1000 -g appuser appuser && \
 WORKDIR /app
 
 # Copy Python packages from builder stage
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
