@@ -1,20 +1,22 @@
 # Sidecar container for Kubernetes pod execution
 FROM python:3.14-slim
 
-# Install curl for health checks and util-linux for nsenter
+# Install curl for health checks, util-linux for nsenter, and uv
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     util-linux \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Create non-root user (used when nsenter is not needed)
 RUN groupadd -r -g 1000 appuser && useradd -r -u 1000 -g appuser appuser
 
 WORKDIR /app
 
-# Copy requirements and install
+# Copy requirements and install with uv
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ENV PATH="/root/.local/bin:$PATH"
+RUN uv pip install --system -r requirements.txt
 
 # Copy sidecar code
 COPY main.py .

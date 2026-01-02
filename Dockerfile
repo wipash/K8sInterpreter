@@ -20,7 +20,8 @@ LABEL maintainer="LibreCodeInterpreter Contributors" \
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Set working directory
 WORKDIR /app
@@ -28,9 +29,9 @@ WORKDIR /app
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies with uv
+ENV PATH="/root/.local/bin:$PATH"
+RUN uv pip install --system -r requirements.txt
 
 # Production stage
 FROM python:3.14-slim as production
