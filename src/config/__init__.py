@@ -119,11 +119,11 @@ class Settings(BaseSettings):
         description="Namespace for execution pods (empty = use API's namespace)",
     )
     k8s_service_account: str = Field(
-        default="librecodeinterpreter-executor",
+        default="k8sinterpreter-executor",
         description="Service account for execution pods",
     )
     k8s_sidecar_image: str = Field(
-        default="aronmuon/librecodeinterpreter-sidecar:latest",
+        default="aronmuon/k8sinterpreter-sidecar:latest",
         description="Sidecar container image for pod communication",
     )
     k8s_sidecar_port: int = Field(
@@ -155,7 +155,7 @@ class Settings(BaseSettings):
         description="Maximum execution time for Jobs",
     )
     k8s_image_registry: str = Field(
-        default="aronmuon/librecodeinterpreter",
+        default="aronmuon/k8sinterpreter",
         description="Container image registry prefix (images: {registry}-{language}:{tag})",
     )
     k8s_image_tag: str = Field(
@@ -405,7 +405,7 @@ class Settings(BaseSettings):
             if data.get("supported_languages"):
                 return data
 
-            registry = data.get("k8s_image_registry", "aronmuon/librecodeinterpreter")
+            registry = data.get("k8s_image_registry", "aronmuon/k8sinterpreter")
             tag = data.get("k8s_image_tag", "latest")
             data["supported_languages"] = {
                 code: {
