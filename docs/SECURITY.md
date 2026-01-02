@@ -239,7 +239,7 @@ Keep WAN access disabled (default) when:
 #### Audit Logging
 
 WAN-enabled pods are tracked via labels:
-- `librecodeinterpreter.io/wan-access=true` on each pod
+- `k8sinterpreter.io/wan-access=true` on each pod
 - NetworkPolicy application is logged at pod creation
 
 ### State Persistence Security

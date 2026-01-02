@@ -1,14 +1,14 @@
-# LibreCodeInterpreter Architecture
+# K8sInterpreter Architecture
 
 ## Overview
 
-LibreCodeInterpreter is a secure API for executing code in isolated Kubernetes pods. It uses a **Kubernetes-native architecture** with warm pod pools for low-latency execution and Jobs for cold-path languages.
+K8sInterpreter is a secure API for executing code in isolated Kubernetes pods. It uses a **Kubernetes-native architecture** with warm pod pools for low-latency execution and Jobs for cold-path languages.
 
 ## High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         LibreCodeInterpreter API                             │
+│                         K8sInterpreter API                             │
 │                         (FastAPI Application)                                │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
@@ -228,7 +228,7 @@ POD_POOL_RS=0      # Rust: use Jobs
 ### Kubernetes Settings
 
 ```python
-K8S_NAMESPACE=librecodeinterpreter
+K8S_NAMESPACE=k8sinterpreter
 K8S_SIDECAR_IMAGE=ghcr.io/.../sidecar:latest
 K8S_CPU_LIMIT=1
 K8S_MEMORY_LIMIT=512Mi
@@ -307,7 +307,7 @@ docker/
     └── requirements.txt
 
 helm-deployments/
-└── librecodeinterpreter/  # Helm chart
+└── k8sinterpreter/  # Helm chart
     ├── templates/
     │   ├── deployment.yaml
     │   ├── service.yaml
@@ -341,8 +341,8 @@ The API exposes metrics for:
 ### Helm Installation
 
 ```bash
-helm install librecodeinterpreter ./helm-deployments/librecodeinterpreter \
-  --namespace librecodeinterpreter \
+helm install k8sinterpreter ./helm-deployments/k8sinterpreter \
+  --namespace k8sinterpreter \
   --create-namespace \
   --set api.replicas=2 \
   --set execution.languages.python.poolSize=5
