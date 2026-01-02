@@ -10,8 +10,8 @@ help:
 	@echo "  test-unit        Run unit tests only"
 	@echo "  test-integration Run integration tests only"
 	@echo "  test-cov         Run tests with coverage report"
-	@echo "  lint             Run flake8 linter"
-	@echo "  format           Format code with black"
+	@echo "  lint             Run ruff linter"
+	@echo "  format           Format code with ruff"
 	@echo "  format-check     Check code formatting without changes"
 	@echo "  typecheck        Run mypy type checking"
 	@echo "  clean            Remove build artifacts and cache"
@@ -47,17 +47,17 @@ test-cov:
 	uv run pytest --cov=src --cov-report=html --cov-report=term tests/
 	@echo "Coverage report generated in htmlcov/"
 
-# Lint with flake8
+# Lint with ruff
 lint:
-	uv run flake8 src/ tests/
+	uv run ruff check src/ tests/
 
-# Format with black
+# Format with ruff
 format:
-	uv run black src/ tests/
+	uv run ruff format src/ tests/
 
 # Check formatting without changes
 format-check:
-	uv run black --check src/ tests/
+	uv run ruff format --check src/ tests/
 
 # Type checking with mypy
 typecheck:

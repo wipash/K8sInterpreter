@@ -22,17 +22,13 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio pytest-cov pytest-mock bandit
 
-      - name: Lint with flake8
+      - name: Lint with ruff
         run: |
-          # stop the build if there are Python syntax errors or undefined names
-          flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
-          # exit-zero treats all errors as warnings. Default is 79 chars, matching strict flake8.
-          flake8 src/ --count --exit-zero --max-complexity=10 --statistics
+          ruff check src/
 
-      - name: Check formatting with Black
+      - name: Check formatting with ruff
         run: |
-          # This will fail if code is not formatted. Run 'black src/' locally to fix.
-          black src/ --check
+          ruff format --check src/
 
       - name: Type checking with mypy
         run: |
