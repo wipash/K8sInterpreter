@@ -115,7 +115,7 @@ jobs:
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-api
+      image_name: k8sinterpreter-api
       dockerfile: Dockerfile
       context: .
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -126,7 +126,7 @@ jobs:
     if: needs.changes.outputs.sidecar == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-sidecar
+      image_name: k8sinterpreter-sidecar
       dockerfile: docker/sidecar/Dockerfile
       context: docker/sidecar
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -137,7 +137,7 @@ jobs:
     if: needs.changes.outputs.python == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-python
+      image_name: k8sinterpreter-python
       dockerfile: docker/python.Dockerfile
       context: docker
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -148,7 +148,7 @@ jobs:
     if: needs.changes.outputs.javascript == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-javascript
+      image_name: k8sinterpreter-javascript
       dockerfile: docker/nodejs.Dockerfile
       context: docker
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -159,7 +159,7 @@ jobs:
     if: needs.changes.outputs.javascript == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-typescript
+      image_name: k8sinterpreter-typescript
       dockerfile: docker/nodejs.Dockerfile
       context: docker
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -170,7 +170,7 @@ jobs:
     if: needs.changes.outputs.go == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-go
+      image_name: k8sinterpreter-go
       dockerfile: docker/go.Dockerfile
       context: docker
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -181,7 +181,7 @@ jobs:
     if: needs.changes.outputs.java == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-java
+      image_name: k8sinterpreter-java
       dockerfile: docker/java.Dockerfile
       context: docker
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -192,7 +192,7 @@ jobs:
     if: needs.changes.outputs.c-cpp == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-c-cpp
+      image_name: k8sinterpreter-c-cpp
       dockerfile: docker/c-cpp.Dockerfile
       context: docker
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -203,7 +203,7 @@ jobs:
     if: needs.changes.outputs.php == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-php
+      image_name: k8sinterpreter-php
       dockerfile: docker/php.Dockerfile
       context: docker
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -214,7 +214,7 @@ jobs:
     if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-rust
+      image_name: k8sinterpreter-rust
       dockerfile: docker/rust.Dockerfile
       context: docker
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -225,7 +225,7 @@ jobs:
     if: needs.changes.outputs.r == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-r
+      image_name: k8sinterpreter-r
       dockerfile: docker/r.Dockerfile
       context: docker
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -236,7 +236,7 @@ jobs:
     if: needs.changes.outputs.fortran == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-fortran
+      image_name: k8sinterpreter-fortran
       dockerfile: docker/fortran.Dockerfile
       context: docker
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -247,7 +247,7 @@ jobs:
     if: needs.changes.outputs.d == 'true' || needs.changes.outputs.force_all == 'true'
     uses: ./.github/workflows/docker-build-reusable.yml
     with:
-      image_name: librecodeinterpreter-d
+      image_name: k8sinterpreter-d
       dockerfile: docker/d.Dockerfile
       context: docker
       image_tag: ${{ needs.changes.outputs.image_tag }}
@@ -265,7 +265,7 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-api
+      image_name: k8sinterpreter-api
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
 
@@ -278,7 +278,7 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-sidecar
+      image_name: k8sinterpreter-sidecar
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
 
@@ -291,7 +291,7 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-python
+      image_name: k8sinterpreter-python
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
 
@@ -304,7 +304,7 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-javascript
+      image_name: k8sinterpreter-javascript
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
 
@@ -317,7 +317,7 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-typescript
+      image_name: k8sinterpreter-typescript
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
 
@@ -330,7 +330,7 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-go
+      image_name: k8sinterpreter-go
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
 
@@ -343,7 +343,7 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-java
+      image_name: k8sinterpreter-java
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
 
@@ -356,7 +356,7 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-c-cpp
+      image_name: k8sinterpreter-c-cpp
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
 
@@ -369,7 +369,7 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-php
+      image_name: k8sinterpreter-php
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
 
@@ -382,7 +382,7 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-rust
+      image_name: k8sinterpreter-rust
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
 
@@ -395,7 +395,7 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-r
+      image_name: k8sinterpreter-r
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
 
@@ -408,7 +408,7 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-fortran
+      image_name: k8sinterpreter-fortran
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
 
@@ -421,6 +421,6 @@ jobs:
       needs.changes.outputs.force_all != 'true'
     uses: ./.github/workflows/docker-retag-reusable.yml
     with:
-      image_name: librecodeinterpreter-d
+      image_name: k8sinterpreter-d
       new_tag: ${{ needs.changes.outputs.image_tag }}
       previous_tag: ${{ needs.changes.outputs.previous_tag }}
