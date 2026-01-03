@@ -198,6 +198,7 @@ config/local.py
 *.db-journal
 *.db-wal
 *.db-shm
+_version.py
 
 # temporary
 review/
