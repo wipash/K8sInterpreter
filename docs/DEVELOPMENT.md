@@ -17,8 +17,8 @@ This document provides detailed instructions for setting up the development envi
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/LibreCodeInterpreter/LibreCodeInterpreter.git
-   cd LibreCodeInterpreter
+   git clone https://github.com/K8sInterpreter/K8sInterpreter.git
+   cd K8sInterpreter
    ```
 
 2. **Create a virtual environment**
@@ -81,7 +81,7 @@ cd docker && ./build-images.sh -p && cd ..
 cd docker && ./build-images.sh -l python && cd ..
 
 # Build the HTTP sidecar image
-cd docker/sidecar && docker build -t librecodeinterpreter/sidecar:latest . && cd ../..
+cd docker/sidecar && docker build -t k8sinterpreter/sidecar:latest . && cd ../..
 ```
 
 For more details on Kubernetes pod management, see [ARCHITECTURE.md](ARCHITECTURE.md).

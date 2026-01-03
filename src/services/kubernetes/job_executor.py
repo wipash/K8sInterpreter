@@ -41,7 +41,7 @@ class JobExecutor:
         namespace: Optional[str] = None,
         ttl_seconds_after_finished: int = 60,
         active_deadline_seconds: int = 300,
-        sidecar_image: str = "aronmuon/librecodeinterpreter-sidecar:latest",
+        sidecar_image: str = "aronmuon/k8sinterpreter-sidecar:latest",
     ):
         """Initialize the Job executor.
 
@@ -97,12 +97,12 @@ class JobExecutor:
         namespace = spec.namespace or self.namespace
 
         labels = {
-            "app.kubernetes.io/name": "librecodeinterpreter",
+            "app.kubernetes.io/name": "k8sinterpreter",
             "app.kubernetes.io/component": "execution",
-            "app.kubernetes.io/managed-by": "librecodeinterpreter",
-            "librecodeinterpreter.io/language": spec.language,
-            "librecodeinterpreter.io/session-id": session_id[:63],
-            "librecodeinterpreter.io/type": "job",
+            "app.kubernetes.io/managed-by": "k8sinterpreter",
+            "k8sinterpreter.io/language": spec.language,
+            "k8sinterpreter.io/session-id": session_id[:63],
+            "k8sinterpreter.io/type": "job",
             **spec.labels,
         }
 

@@ -15,10 +15,10 @@ class KubernetesConfig:
     namespace: str = ""
 
     # Service account for execution pods
-    service_account: str = "librecodeinterpreter-executor"
+    service_account: str = "k8sinterpreter-executor"
 
     # Sidecar configuration
-    sidecar_image: str = "aronmuon/librecodeinterpreter-sidecar:latest"
+    sidecar_image: str = "aronmuon/k8sinterpreter-sidecar:latest"
     sidecar_port: int = 8080
 
     # Resource limits for execution pods
@@ -48,8 +48,8 @@ class KubernetesConfig:
 
     # Image registry configuration
     # Format: {image_registry}-{language}:{image_tag}
-    # e.g., aronmuon/librecodeinterpreter-python:latest
-    image_registry: str = "aronmuon/librecodeinterpreter"
+    # e.g., aronmuon/k8sinterpreter-python:latest
+    image_registry: str = "aronmuon/k8sinterpreter"
     image_tag: str = "latest"
 
     def get_image_for_language(self, language: str) -> str:

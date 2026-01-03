@@ -1,14 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "librecodeinterpreter.name" -}}
+{{- define "k8sinterpreter.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
 */}}
-{{- define "librecodeinterpreter.fullname" -}}
+{{- define "k8sinterpreter.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -24,16 +24,16 @@ Create a default fully qualified app name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "librecodeinterpreter.chart" -}}
+{{- define "k8sinterpreter.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "librecodeinterpreter.labels" -}}
-helm.sh/chart: {{ include "librecodeinterpreter.chart" . }}
-{{ include "librecodeinterpreter.selectorLabels" . }}
+{{- define "k8sinterpreter.labels" -}}
+helm.sh/chart: {{ include "k8sinterpreter.chart" . }}
+{{ include "k8sinterpreter.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -43,17 +43,17 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "librecodeinterpreter.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "librecodeinterpreter.name" . }}
+{{- define "k8sinterpreter.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "k8sinterpreter.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Create the name of the service account to use for API
 */}}
-{{- define "librecodeinterpreter.serviceAccountName" -}}
+{{- define "k8sinterpreter.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "librecodeinterpreter.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "k8sinterpreter.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
@@ -62,9 +62,9 @@ Create the name of the service account to use for API
 {{/*
 Create the name of the executor service account
 */}}
-{{- define "librecodeinterpreter.executorServiceAccountName" -}}
+{{- define "k8sinterpreter.executorServiceAccountName" -}}
 {{- if .Values.execution.serviceAccount.create }}
-{{- default (printf "%s-executor" (include "librecodeinterpreter.fullname" .)) .Values.execution.serviceAccount.name }}
+{{- default (printf "%s-executor" (include "k8sinterpreter.fullname" .)) .Values.execution.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.execution.serviceAccount.name }}
 {{- end }}
@@ -73,14 +73,14 @@ Create the name of the executor service account
 {{/*
 Execution namespace
 */}}
-{{- define "librecodeinterpreter.executionNamespace" -}}
+{{- define "k8sinterpreter.executionNamespace" -}}
 {{- default .Release.Namespace .Values.execution.namespace }}
 {{- end }}
 
 {{/*
 Redis URL
 */}}
-{{- define "librecodeinterpreter.redisUrl" -}}
+{{- define "k8sinterpreter.redisUrl" -}}
 {{- if .Values.redis.url }}
 {{- .Values.redis.url }}
 {{- else if .Values.redis.host }}

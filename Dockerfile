@@ -43,13 +43,13 @@ ARG BUILD_DATE
 ARG VERSION=0.0.0.dev0
 ARG VCS_REF
 
-LABEL maintainer="LibreCodeInterpreter Contributors" \
-    org.opencontainers.image.title="LibreCodeInterpreter" \
+LABEL maintainer="K8sInterpreter Contributors" \
+    org.opencontainers.image.title="K8sInterpreter" \
     org.opencontainers.image.description="Secure API for executing code in isolated environments" \
     org.opencontainers.image.version="${VERSION}" \
     org.opencontainers.image.created="${BUILD_DATE}" \
     org.opencontainers.image.revision="${VCS_REF}" \
-    org.opencontainers.image.source="https://github.com/LibreCodeInterpreter/LibreCodeInterpreter" \
+    org.opencontainers.image.source="https://github.com/wipash/K8sInterpreter" \
     org.opencontainers.image.licenses="Apache-2.0"
 
 # Install runtime dependencies

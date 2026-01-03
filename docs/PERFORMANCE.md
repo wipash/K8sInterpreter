@@ -316,7 +316,7 @@ Recommended alert conditions:
 
 3. **Check pod health**:
    ```bash
-   kubectl -n librecodeinterpreter get pods -l app.kubernetes.io/managed-by=librecodeinterpreter
+   kubectl -n k8sinterpreter get pods -l app.kubernetes.io/managed-by=k8sinterpreter
    ```
    If pods are unhealthy, check logs with `kubectl logs`.
 
@@ -339,7 +339,7 @@ Recommended alert conditions:
 3. **Check pod cleanup**:
    Pods should be destroyed immediately. Check for orphaned pods:
    ```bash
-   kubectl -n librecodeinterpreter get pods -l app.kubernetes.io/managed-by=librecodeinterpreter
+   kubectl -n k8sinterpreter get pods -l app.kubernetes.io/managed-by=k8sinterpreter
    ```
 
 ### Memory Issues
@@ -347,7 +347,7 @@ Recommended alert conditions:
 1. **Check pod memory**:
 
    ```bash
-   kubectl top pods -n librecodeinterpreter
+   kubectl top pods -n k8sinterpreter
    ```
 
 2. **Reduce state size limit**:

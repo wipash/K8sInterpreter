@@ -11,7 +11,7 @@ Use this section to tell people about which versions of your project are current
 
 ## Reporting a Vulnerability
 
-We take the security of LibreCodeInterpreter seriously. If you believe you have found a security vulnerability, please report it to us as described below.
+We take the security of K8sInterpreter seriously. If you believe you have found a security vulnerability, please report it to us as described below.
 
 ### Disclosure Policy
 
@@ -32,4 +32,4 @@ Please include:
 
 We will acknowledge receipt of your report within 48 hours and will strive to provide you with an update on our analysis and planned resolution within 1 week.
 
-Thank you for helping keep LibreCodeInterpreter secure!
+Thank you for helping keep K8sInterpreter secure!

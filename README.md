@@ -1,8 +1,8 @@
-# LibreCodeInterpreter
+# K8sInterpreter
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![CI Status](https://github.com/usnavy13/LibreCodeInterpreter/actions/workflows/lint.yml/badge.svg)](https://github.com/usnavy13/LibreCodeInterpreter/actions/workflows/lint.yml)
+[![CI Status](https://github.com/usnavy13/K8sInterpreter/actions/workflows/lint.yml/badge.svg)](https://github.com/usnavy13/K8sInterpreter/actions/workflows/lint.yml)
 
 A secure, open-source code interpreter API that provides sandboxed code execution in isolated Kubernetes pods. Compatible with LibreChat's Code Interpreter API.
 
@@ -21,15 +21,15 @@ Get up and running in minutes with Kubernetes deployment.
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/usnavy13/LibreCodeInterpreter.git
-   cd LibreCodeInterpreter
+   git clone https://github.com/usnavy13/K8sInterpreter.git
+   cd K8sInterpreter
    ```
 
 2. **Deploy with Helm**
 
    ```bash
-   helm install librecodeinterpreter ./helm-deployments/librecodeinterpreter \
-     --namespace librecodeinterpreter \
+   helm install k8sinterpreter ./helm-deployments/k8sinterpreter \
+     --namespace k8sinterpreter \
      --create-namespace \
      --set api.replicas=2 \
      --set execution.languages.python.poolSize=5
@@ -39,7 +39,7 @@ Get up and running in minutes with Kubernetes deployment.
 
    ```bash
    # Port-forward for local access
-   kubectl -n librecodeinterpreter port-forward svc/librecodeinterpreter 8000:8000
+   kubectl -n k8sinterpreter port-forward svc/k8sinterpreter 8000:8000
    ```
 
 The API will be available at `http://localhost:8000`.
@@ -86,7 +86,7 @@ The dashboard requires the master API key for authentication.
 
 ## Architecture
 
-The LibreCodeInterpreter is built with a focus on security, speed, and scalability. It uses a **Kubernetes-native architecture** with **FastAPI** for the web layer, **warm pod pools** for low-latency execution, and **Redis** for session management.
+The K8sInterpreter is built with a focus on security, speed, and scalability. It uses a **Kubernetes-native architecture** with **FastAPI** for the web layer, **warm pod pools** for low-latency execution, and **Redis** for session management.
 
 Key features include:
 
