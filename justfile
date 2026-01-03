@@ -4,9 +4,7 @@ default: help
 # Show available recipes
 help:
     @echo "Available recipes:"
-    @echo "  venv             Create virtual environment with uv"
     @echo "  install          Install dependencies"
-    @echo "  dev              Install dev dependencies and setup"
     @echo "  test             Run all tests"
     @echo "  test-unit        Run unit tests only"
     @echo "  test-integration Run integration tests only"
@@ -20,16 +18,9 @@ help:
     @echo "  docker-up        Start docker-compose services"
     @echo "  docker-down      Stop docker-compose services"
 
-# Create virtual environment
-venv:
-    uv venv
-
 # Install dependencies
 install:
-    uv pip install -r requirements.txt
-
-# Development setup
-dev: venv install
+    uv sync
 
 # Run all tests
 test:
