@@ -61,7 +61,7 @@ A built-in admin dashboard is available at `http://localhost:8000/admin-dashboar
 
 - **Overview**: Real-time execution metrics, success rates, and performance graphs
 - **API Keys**: Create, view, and manage API keys with rate limiting
-- **System Health**: Monitor Redis, MinIO, Kubernetes, and pod pool status
+- **System Health**: Monitor Redis, S3 storage, Kubernetes, and pod pool status
 
 The dashboard requires the master API key for authentication.
 
@@ -74,7 +74,7 @@ The dashboard requires the master API key for authentication.
 - **Secure Execution**: Isolated Kubernetes pods with comprehensive resource limits and network policies
 - **File Management**: Upload, download, and manage files within execution sessions
 - **Session Management**: Redis-based session handling with automatic cleanup
-- **S3-Compatible Storage**: MinIO integration for persistent file storage
+- **S3-Compatible Storage**: Garage integration for lightweight, persistent file storage
 - **Authentication**: API key-based authentication for secure access
 - **HTTPS/SSL Support**: Optional SSL/TLS encryption with automatic HTTP to HTTPS redirection
 - **Health Monitoring**: Comprehensive health check endpoints for all dependencies
@@ -123,7 +123,7 @@ The service is highly configurable via environment variables.
 | Category       | Description                                  |
 | -------------- | -------------------------------------------- |
 | **API**        | Host, port, and security settings.           |
-| **Storage**    | Redis and MinIO/S3 connection details.       |
+| **Storage**    | Redis and S3-compatible storage (Garage/MinIO/S3). |
 | **Resources**  | Per-execution memory, CPU, and time limits.  |
 | **Pod Pools**  | Per-language pool sizing and warmup settings.|
 | **Kubernetes** | Namespace, RBAC, and pod templates.          |

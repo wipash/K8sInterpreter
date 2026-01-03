@@ -33,52 +33,71 @@ services:
       timeout: 10s
       retries: 3
 
-  # MinIO for file storage
-  minio:
-    image: minio/minio:latest
-    container_name: code-interpreter-minio
+  # Garage for file storage (S3-compatible)
+  garage:
+    image: dxflrs/garage:v2.1.0
+    container_name: code-interpreter-garage
     ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
-    environment:
-      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
-      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
-      - MINIO_BROWSER_REDIRECT_URL=http://localhost:9001
-    command: server /data --console-address ":9001"
+      - "127.0.0.1:9000:3900"  # S3 API (mapped to 9000 for compatibility)
+      - "127.0.0.1:3901:3901"  # RPC
+      - "127.0.0.1:3902:3902"  # S3 Web
+      - "127.0.0.1:3903:3903"  # Admin API
     volumes:
-      - minio-data:/data
+      - ./garage.toml:/etc/garage.toml
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:3903/health | grep -q 'Garage is fully operational'"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # MinIO bucket initialization
-  minio-init:
-    image: minio/mc:latest
-    container_name: code-interpreter-minio-init
+  # Garage bucket initialization
+  garage-init:
+    image: dxflrs/garage:v2.1.0
+    container_name: code-interpreter-garage-init
     depends_on:
-      - minio
+      - garage
     environment:
-      - MINIO_ENDPOINT=minio:9000
+      - GARAGE_RPC_SECRET=1799bccfd7411edd1b4df97fcefbdedb2704e31a5b9747e3ce1c43d34974e19e1c715f35f4ca2e171b21f7786c713dd48ad2901d911fcda3d1a826c6cfad1e77
+      - GARAGE_RPC_HOST=garage:3901
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_BUCKET=${MINIO_BUCKET:-code-interpreter-files}
     entrypoint: >
       /bin/sh -c "
-        echo 'Waiting for MinIO to be ready...';
-        until mc alias set minio http://$$MINIO_ENDPOINT $$MINIO_ACCESS_KEY $$MINIO_SECRET_KEY; do
-          echo 'MinIO not ready, waiting...';
+        echo 'Waiting for Garage to be ready...';
+        until wget -q -O- http://garage:3900/ 2>/dev/null; do
+          echo 'Garage not ready, waiting...';
           sleep 2;
         done;
-        echo 'MinIO is ready. Creating bucket if it does not exist...';
-        mc mb minio/$$MINIO_BUCKET --ignore-existing;
+        echo 'Garage is ready. Setting up bucket and keys...';
+        /garage -c /tmp/garage-client.toml -h garage:3901 status 2>/dev/null ||
+        (echo 'rpc_secret = \"'$$GARAGE_RPC_SECRET'\"' > /tmp/garage-client.toml &&
+         echo 'rpc_host = \"'$$GARAGE_RPC_HOST'\"' >> /tmp/garage-client.toml);
+        /garage -c /tmp/garage-client.toml layout show 2>/dev/null || /garage -c /tmp/garage-client.toml layout assign -z dc1 -c 1 $$(hostname);
+        /garage -c /tmp/garage-client.toml layout show 2>/dev/null | grep -q 'Staged changes' && /garage -c /tmp/garage-client.toml layout apply --version 1;
+        KEY_ID=$$(/garage -c /tmp/garage-client.toml key list 2>/dev/null | grep $$MINIO_ACCESS_KEY | awk '{print $$1}');
+        if [ -z \"$$KEY_ID\" ]; then
+          echo 'Creating key...';
+          /garage -c /tmp/garage-client.toml key create $$MINIO_ACCESS_KEY;
+          KEY_ID=$$(/garage -c /tmp/garage-client.toml key list | grep $$MINIO_ACCESS_KEY | awk '{print $$1}');
+          /garage -c /tmp/garage-client.toml key import $$KEY_ID $$MINIO_ACCESS_KEY $$MINIO_SECRET_KEY;
+        fi;
+        BUCKET_ID=$$(/garage -c /tmp/garage-client.toml bucket list 2>/dev/null | grep $$MINIO_BUCKET | awk '{print $$1}');
+        if [ -z \"$$BUCKET_ID\" ]; then
+          echo 'Creating bucket...';
+          /garage -c /tmp/garage-client.toml bucket create $$MINIO_BUCKET;
+          /garage -c /tmp/garage-client.toml bucket allow --read --write --owner $$MINIO_BUCKET --key $$MINIO_ACCESS_KEY;
+        fi;
         echo 'Bucket setup complete.';
       "
 
 volumes:
   redis-data:
     driver: local
-  minio-data:
+  garage-meta:
+    driver: local
+  garage-data:
     driver: local

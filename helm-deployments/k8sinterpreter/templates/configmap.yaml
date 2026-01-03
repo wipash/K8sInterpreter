@@ -90,7 +90,7 @@ data:
   STATE_TTL_SECONDS: {{ .Values.state.ttlSeconds | quote }}
   STATE_MAX_SIZE_MB: {{ .Values.state.maxSizeMb | quote }}
 
-  # MinIO/S3 Configuration
+  # S3-Compatible Storage Configuration (Garage/MinIO/S3)
   {{- if not .Values.secretsStore.enabled }}
   # When using secretsStore, these values come from AWS Secrets Manager
   MINIO_ENDPOINT: {{ .Values.minio.endpoint | quote }}
