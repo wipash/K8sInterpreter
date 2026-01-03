@@ -1,25 +1,50 @@
-# Sidecar container for Kubernetes pod execution
-FROM python:3.14-slim
+# syntax=docker/dockerfile:1
+# Keep this syntax directive! It's used to enable Docker BuildKit
 
-# Install curl for health checks, util-linux for nsenter, and uv
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    util-linux \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -LsSf https://astral.sh/uv/install.sh | sh
+################################
+# Builder STAGE
+################################
+FROM ghcr.io/astral-sh/uv:python3.13-trixie-slim AS builder
+
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+ENV UV_PYTHON_DOWNLOADS=0
+
+WORKDIR /app
+
+# Install dependencies into a virtual environment
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=requirements.txt,target=requirements.txt \
+    uv venv /app/.venv && \
+    uv pip install --python /app/.venv/bin/python -r requirements.txt
+
+# Copy application code
+COPY main.py .
+
+################################
+# Production STAGE
+################################
+FROM python:3.13-slim-trixie AS production
+
+# Install runtime dependencies
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN set -eux; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      curl \
+      util-linux; \
+    apt-get autoremove -y; \
+    rm -rf /var/lib/apt/lists/*
 
 # Create non-root user (used when nsenter is not needed)
 RUN groupadd -r -g 1000 appuser && useradd -r -u 1000 -g appuser appuser
 
 WORKDIR /app
 
-# Copy requirements and install with uv
-COPY requirements.txt .
-ENV PATH="/root/.local/bin:$PATH"
-RUN uv pip install --system -r requirements.txt
+# Copy the application from the builder
+COPY --from=builder /app /app
 
-# Copy sidecar code
-COPY main.py .
+# Place executables in the environment at the front of the path
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Create working directory
 RUN mkdir -p /mnt/data && chown -R appuser:appuser /mnt/data /app
