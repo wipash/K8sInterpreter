@@ -48,7 +48,7 @@ services:
       - garage-data:/var/lib/garage/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3900/ || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:3903/health | grep -q 'Garage is fully operational'"]
       interval: 30s
       timeout: 10s
       retries: 3
