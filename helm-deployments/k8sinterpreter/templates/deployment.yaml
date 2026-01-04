@@ -15,7 +15,10 @@ spec:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- if not .Values.secretsStore.enabled }}
+        {{- $needsHelmSecret := or (not .Values.api.existingSecret) (not .Values.redis.existingSecret) (and (not .Values.minio.existingSecret) (not .Values.minio.useIAM)) }}
+        {{- if $needsHelmSecret }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
         {{- end }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
@@ -74,9 +77,27 @@ spec:
             - secretRef:
                 name: {{ include "k8sinterpreter.fullname" . }}-aws-secrets
             {{- else }}
+            {{- $needsHelmSecret := or (not .Values.api.existingSecret) (not .Values.redis.existingSecret) (and (not .Values.minio.existingSecret) (not .Values.minio.useIAM)) }}
+            {{- if $needsHelmSecret }}
             # Use Helm-managed secrets
             - secretRef:
                 name: {{ include "k8sinterpreter.fullname" . }}-secrets
+            {{- end }}
+            {{- if .Values.api.existingSecret }}
+            # External secret for API keys (API_KEY, MASTER_API_KEY)
+            - secretRef:
+                name: {{ .Values.api.existingSecret }}
+            {{- end }}
+            {{- if .Values.redis.existingSecret }}
+            # External secret for Redis (REDIS_URL)
+            - secretRef:
+                name: {{ .Values.redis.existingSecret }}
+            {{- end }}
+            {{- if .Values.minio.existingSecret }}
+            # External secret for S3/MinIO credentials (MINIO_ACCESS_KEY, MINIO_SECRET_KEY)
+            - secretRef:
+                name: {{ .Values.minio.existingSecret }}
+            {{- end }}
             {{- end }}
           volumeMounts:
             - name: data

@@ -93,3 +93,54 @@ Redis URL
 {{- "redis://redis:6379/0" }}
 {{- end }}
 {{- end }}
+
+{{/*
+Check if Helm-managed secret is needed
+Returns true if any of the following conditions are met:
+- api.existingSecret is not set (API_KEY will be auto-generated)
+- redis.existingSecret is not set (REDIS_URL needs to be generated)
+- minio.existingSecret is not set AND minio.useIAM is false (S3 credentials needed)
+*/}}
+{{- define "k8sinterpreter.needsHelmSecret" -}}
+{{- if or (not .Values.api.existingSecret) (not .Values.redis.existingSecret) (and (not .Values.minio.existingSecret) (not .Values.minio.useIAM)) }}
+{{- true }}
+{{- end }}
+{{- end }}
+
+{{/*
+Validate MinIO/S3 configuration
+When not using existingSecret or IAM, accessKey and secretKey should be provided.
+This is a warning helper - it doesn't fail the template but can be used for documentation.
+*/}}
+{{- define "k8sinterpreter.validateMinioConfig" -}}
+{{- if and (not .Values.minio.existingSecret) (not .Values.minio.useIAM) }}
+{{- if or (not .Values.minio.accessKey) (not .Values.minio.secretKey) }}
+{{- /* S3 credentials not fully configured - application may fail at runtime */ -}}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get the list of all secret names that should be referenced in envFrom.
+This helps ensure consistent secret references across templates.
+*/}}
+{{- define "k8sinterpreter.secretRefs" -}}
+{{- $secrets := list }}
+{{- if not .Values.secretsStore.enabled }}
+{{- if include "k8sinterpreter.needsHelmSecret" . }}
+{{- $secrets = append $secrets (printf "%s-secrets" (include "k8sinterpreter.fullname" .)) }}
+{{- end }}
+{{- if .Values.api.existingSecret }}
+{{- $secrets = append $secrets .Values.api.existingSecret }}
+{{- end }}
+{{- if .Values.redis.existingSecret }}
+{{- $secrets = append $secrets .Values.redis.existingSecret }}
+{{- end }}
+{{- if .Values.minio.existingSecret }}
+{{- $secrets = append $secrets .Values.minio.existingSecret }}
+{{- end }}
+{{- else }}
+{{- $secrets = append $secrets (printf "%s-aws-secrets" (include "k8sinterpreter.fullname" .)) }}
+{{- end }}
+{{- toJson $secrets }}
+{{- end }}
