@@ -14,11 +14,8 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        {{- if not .Values.secretsStore.enabled }}
-        {{- $needsHelmSecret := or (not .Values.api.existingSecret) (not .Values.redis.existingSecret) (and (not .Values.minio.existingSecret) (not .Values.minio.useIAM)) }}
-        {{- if $needsHelmSecret }}
+        {{- if and (not .Values.secretsStore.enabled) (include "k8sinterpreter.needsHelmSecret" .) }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
-        {{- end }}
         {{- end }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
@@ -77,8 +74,7 @@ spec:
             - secretRef:
                 name: {{ include "k8sinterpreter.fullname" . }}-aws-secrets
             {{- else }}
-            {{- $needsHelmSecret := or (not .Values.api.existingSecret) (not .Values.redis.existingSecret) (and (not .Values.minio.existingSecret) (not .Values.minio.useIAM)) }}
-            {{- if $needsHelmSecret }}
+            {{- if include "k8sinterpreter.needsHelmSecret" . }}
             # Use Helm-managed secrets
             - secretRef:
                 name: {{ include "k8sinterpreter.fullname" . }}-secrets

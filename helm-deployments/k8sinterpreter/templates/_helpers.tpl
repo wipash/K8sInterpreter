@@ -120,27 +120,3 @@ This is a warning helper - it doesn't fail the template but can be used for docu
 {{- end }}
 {{- end }}
 
-{{/*
-Get the list of all secret names that should be referenced in envFrom.
-This helps ensure consistent secret references across templates.
-*/}}
-{{- define "k8sinterpreter.secretRefs" -}}
-{{- $secrets := list }}
-{{- if not .Values.secretsStore.enabled }}
-{{- if include "k8sinterpreter.needsHelmSecret" . }}
-{{- $secrets = append $secrets (printf "%s-secrets" (include "k8sinterpreter.fullname" .)) }}
-{{- end }}
-{{- if .Values.api.existingSecret }}
-{{- $secrets = append $secrets .Values.api.existingSecret }}
-{{- end }}
-{{- if .Values.redis.existingSecret }}
-{{- $secrets = append $secrets .Values.redis.existingSecret }}
-{{- end }}
-{{- if .Values.minio.existingSecret }}
-{{- $secrets = append $secrets .Values.minio.existingSecret }}
-{{- end }}
-{{- else }}
-{{- $secrets = append $secrets (printf "%s-aws-secrets" (include "k8sinterpreter.fullname" .)) }}
-{{- end }}
-{{- toJson $secrets }}
-{{- end }}
