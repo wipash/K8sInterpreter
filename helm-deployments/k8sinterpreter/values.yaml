@@ -6,7 +6,8 @@ replicaCount: 1
 image:
   repository: ghcr.io/wipash/k8sinterpreter-api
   pullPolicy: IfNotPresent
-  tag: "latest"
+  # tag defaults to Chart.AppVersion if not specified
+  tag: ""
 
 imagePullSecrets: []
 nameOverride: ""
@@ -149,12 +150,12 @@ execution:
 
   # Image registry configuration
   # Images are named: {imageRegistry}-{language}:{imageTag}
-  # e.g., aronmuon/k8sinterpreter-python:latest
-  imageRegistry: "aronmuon/k8sinterpreter"
-  imageTag: "latest"
+  # e.g., ghcr.io/wipash/k8sinterpreter-python:1.4.0
+  imageRegistry: "ghcr.io/wipash/k8sinterpreter"
+  # imageTag defaults to Chart.AppVersion if not specified
+  imageTag: ""
   # Image pull policy for execution pods (IfNotPresent, Always, Never)
-  # Use "Always" when using :latest tags to ensure fresh images
-  imagePullPolicy: "Always"
+  imagePullPolicy: "IfNotPresent"
 
   # Service account for execution pods (with pod/job create permissions)
   serviceAccount:
@@ -164,48 +165,44 @@ execution:
 
   # Sidecar container configuration
   sidecar:
-    image: aronmuon/k8sinterpreter-sidecar:latest
+    repository: ghcr.io/wipash/k8sinterpreter-sidecar
+    # tag defaults to Chart.AppVersion if not specified
+    tag: ""
     port: 8080
 
   # Per-language pool configuration
   # poolSize > 0: warm pods maintained
   # poolSize = 0: use Jobs (cold start)
+  # Images default to {imageRegistry}-{language}:{imageTag or appVersion}
+  # Set image: to override with a custom image for a specific language
   languages:
     python:
-      image: ghcr.io/wipash/k8sinterpreter-python:1.3.0
       poolSize: 5
     javascript:
-      image: ghcr.io/wipash/k8sinterpreter-javascript:1.3.0
       poolSize: 2
     typescript:
-      image: ghcr.io/wipash/k8sinterpreter-typescript:1.3.0
       poolSize: 0
     go:
-      image: ghcr.io/wipash/k8sinterpreter-go:1.3.0
       poolSize: 0
     java:
-      image: ghcr.io/wipash/k8sinterpreter-java:1.3.0
       poolSize: 0
     rust:
-      image: ghcr.io/wipash/k8sinterpreter-rust:1.3.0
       poolSize: 0
     c:
-      image: ghcr.io/wipash/k8sinterpreter-c-cpp:1.3.0
+      # Uses c-cpp image by default
+      imageSuffix: "c-cpp"
       poolSize: 0
     cpp:
-      image: ghcr.io/wipash/k8sinterpreter-c-cpp:1.3.0
+      # Uses c-cpp image by default
+      imageSuffix: "c-cpp"
       poolSize: 0
     php:
-      image: ghcr.io/wipash/k8sinterpreter-php:1.3.0
       poolSize: 0
     r:
-      image: ghcr.io/wipash/k8sinterpreter-r:1.3.0
       poolSize: 0
     fortran:
-      image: ghcr.io/wipash/k8sinterpreter-fortran:1.3.0
       poolSize: 0
     d:
-      image: ghcr.io/wipash/k8sinterpreter-d:1.3.0
       poolSize: 0
 
   # Job settings (for languages with poolSize=0)
